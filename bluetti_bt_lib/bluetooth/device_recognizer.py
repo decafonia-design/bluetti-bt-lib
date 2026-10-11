@@ -34,7 +34,6 @@ async def recognize_device(
     ]
 
     for bluetti_device in bluetti_devices:
-        # Create device builder
         device_readers = [
             DeviceReader(
                 mac,
@@ -54,65 +53,71 @@ async def recognize_device(
         ]
 
         for device_reader in device_readers:
+            try:
+                # Read the device type first.
+                data = await device_reader.read(
+                    bluetti_device.get_device_type_registers(),
+                )
 
-            # We only need 6 registers to get the device type
-            data = await device_reader.read(
-                bluetti_device.get_device_type_registers(),
-            )
+                if data is None:
+                    continue
 
-            if data is None:
-                continue
+                type_data = data.get(FieldName.DEVICE_TYPE.value)
 
-            type_data = data.get(FieldName.DEVICE_TYPE.value)
+                if type_data is None:
+                    _LOGGER.error("No data in device type type_data")
+                    continue
 
-            if type_data is None:
-                # We have a problem
-                _LOGGER.error("No data in device type type_data")
-                continue
+                if not isinstance(type_data, str):
+                    _LOGGER.error("Invalid data in device type type_data")
+                    continue
 
-            if not isinstance(type_data, str):
-                # We have a problem
-                _LOGGER.error("Invalid data in device type type_data")
-                continue
+                if type_data == "":
+                    continue
 
-            if type_data == "":
-                # Empty string is not a valid device type
-                continue
+                if DEVICE_NAME_RE.match(type_data + "12345678") is None:
+                    # Some V2 Devices populate the V1 register for type, so we need to check here
+                    _LOGGER.warning(
+                        "Device has populated type_data with trash data"
+                    )
+                    continue
 
-            if DEVICE_NAME_RE.match(type_data + "12345678") is None:
-                # Some V2 Devices populate the V1 register for type, so we need to check here
-                _LOGGER.warning("Device has populated type_data with trash data")
-                continue
+                # Reuse the same reader for the serial-number read.
+                data = await device_reader.read(
+                    bluetti_device.get_device_sn_registers(),
+                )
 
-            data = await device_reader.read(
-                bluetti_device.get_device_sn_registers(),
-            )
+                if data is None:
+                    return DeviceRecognizerResult(
+                        type_data,
+                        bluetti_device.get_iot_version(),
+                        device_reader.config.use_encryption,
+                        "000000000000",
+                    )
 
-            if data is None:
-                # Should never happen
+                sn_data = data.get(FieldName.DEVICE_SN.value)
+
+                if not isinstance(sn_data, int):
+                    return DeviceRecognizerResult(
+                        type_data,
+                        bluetti_device.get_iot_version(),
+                        device_reader.config.use_encryption,
+                        "000000000000",
+                    )
+
                 return DeviceRecognizerResult(
                     type_data,
                     bluetti_device.get_iot_version(),
                     device_reader.config.use_encryption,
-                    "000000000000",  # Use dummy SN
+                    sn_data,
                 )
-
-            sn_data = data.get(FieldName.DEVICE_SN.value)
-
-            if not isinstance(sn_data, int) or sn_data == "":
-                # Should never happen
-                return DeviceRecognizerResult(
-                    type_data,
-                    bluetti_device.get_iot_version(),
-                    device_reader.config.use_encryption,
-                    "000000000000",  # Use dummy SN
-                )
-
-            return DeviceRecognizerResult(
-                type_data,
-                bluetti_device.get_iot_version(),
-                device_reader.config.use_encryption,
-                sn_data,
-            )
+            finally:
+                try:
+                    await device_reader.disconnect()
+                except Exception:
+                    _LOGGER.debug(
+                        "Error cleaning up device reader",
+                        exc_info=True,
+                    )
 
     return None

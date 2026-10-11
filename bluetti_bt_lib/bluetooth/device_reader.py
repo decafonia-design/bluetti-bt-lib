@@ -87,10 +87,10 @@ class DeviceReader:
                 )
 
             if not self.has_notifier:
+                self.has_notifier = True
                 await self.client.start_notify(
                     NOTIFY_UUID, self._notification_handler
                 )
-                self.has_notifier = True
 
             self.logger.debug("Connected to device")
 
@@ -110,12 +110,9 @@ class DeviceReader:
             return False
 
     async def disconnect(self):
-        """Disconnect from the device."""
-        if not self._connected:
-            return
-
+        """Clean up the reader's notification and connection state."""
         async with self.polling_lock:
-            if self.has_notifier:
+            if self.has_notifier and self.client:
                 try:
                     await self.client.stop_notify(NOTIFY_UUID)
                     self.logger.debug("Stopped notifier")
@@ -123,7 +120,13 @@ class DeviceReader:
                     pass
                 self.has_notifier = False
 
-            if self.client:
+            # Only disconnect clients created and managed by this reader.
+            # A supplied ble_client belongs to the caller.
+            if (
+                self.ble_client is None
+                and self.client
+                and self.client.is_connected
+            ):
                 await self.client.disconnect()
                 self.logger.debug("Disconnected from device")
 
