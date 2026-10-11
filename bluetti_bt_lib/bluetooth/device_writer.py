@@ -1,6 +1,8 @@
 import asyncio
 import logging
+import struct
 from typing import Any
+
 import async_timeout
 from bleak import BleakClient
 from bleak.exc import BleakError
@@ -9,6 +11,9 @@ from .encryption import AES_BLOCK_SIZE, BluettiEncryption, Message, MessageType
 from ..const import NOTIFY_UUID, WRITE_UUID
 from ..base_devices import BluettiDevice
 from ..utils.privacy import mac_loggable
+from .device_reader import DeviceReader
+from ..registers import ReadableRegisters, WriteableRegister
+from ..devices.charger2 import CHARGER2, CHARGER2_CONTROL_STATES
 
 
 class DeviceWriterConfig:
@@ -24,8 +29,10 @@ class DeviceWriter:
         bluetti_device: BluettiDevice,
         config: DeviceWriterConfig = DeviceWriterConfig(),
         lock: asyncio.Lock | None = None,
+        reader: DeviceReader | None = None,
     ):
         self.client = bleak_client
+        self.reader = reader
         self.bluetti_device = bluetti_device
         self.config = config
         self.polling_lock = lock or asyncio.Lock()
@@ -126,11 +133,29 @@ class DeviceWriter:
             self.logger.error("Field not supported")
             return False
 
-        command = self.bluetti_device.build_write_command(field, value)
+        control_fields = {
+            "ctrl_system_on_off": 0,
+            "ctrl_silent_charging": 1,
+        }
+        is_shared_control = (
+            isinstance(self.bluetti_device, CHARGER2) and field in control_fields
+        )
 
-        if command is None:
-            self.logger.error("Field is not writeable")
-            return False
+        if is_shared_control:
+            if not isinstance(value, bool):
+                self.logger.error("Charger 2 control value must be bool")
+                return False
+            if self.reader is None:
+                self.logger.error(
+                    "Charger 2 control requires a reader for register 15600"
+                )
+                return False
+            command = None
+        else:
+            command = self.bluetti_device.build_write_command(field, value)
+            if command is None:
+                self.logger.error("Field is not writeable")
+                return False
 
         self.logger.debug("Writing to device register")
 
@@ -143,6 +168,55 @@ class DeviceWriter:
 
                     self.logger.debug("Connected to device")
 
+                    if is_shared_control:
+                        raw_data = await self.reader.read_locked(
+                            [ReadableRegisters(15600, 1)],
+                            raw=True,
+                        )
+                        if not raw_data or 15600 not in raw_data:
+                            self.logger.warning(
+                                "Unable to read Charger 2 control register 15600"
+                            )
+                            return False
+
+                        raw_word = raw_data[15600]
+                        if len(raw_word) != 2:
+                            self.logger.warning(
+                                "Invalid response for Charger 2 register 15600"
+                            )
+                            return False
+
+                        current_word = struct.unpack("!H", raw_word)[0]
+                        current_state = CHARGER2_CONTROL_STATES.get(current_word)
+                        if current_state is None:
+                            self.logger.warning(
+                                "Unknown Charger 2 control value: 0x%04X",
+                                current_word,
+                            )
+                            return False
+
+                        state = list(current_state)
+                        state[control_fields[field]] = value
+                        new_state = tuple(state)
+
+                        new_word = next(
+                            (
+                                word
+                                for word, mapped_state
+                                in CHARGER2_CONTROL_STATES.items()
+                                if mapped_state == new_state
+                            ),
+                            None,
+                        )
+                        if new_word is None:
+                            self.logger.error(
+                                "No Charger 2 register value for state %s",
+                                new_state,
+                            )
+                            return False
+
+                        command = WriteableRegister(15600, new_word)
+
                     command_bytes = bytes(command)
                     if self.config.use_encryption:
                         command_bytes = self.encryption.aes_encrypt(
@@ -153,10 +227,6 @@ class DeviceWriter:
 
                     self.logger.debug("Writing command: %s", command)
 
-                    # Only a writer that owns the notification stream gets an
-                    # acknowledgement back. When the connection is shared with
-                    # a reader, the reader consumes the notifications, so the
-                    # caller has to verify the change by reading afterwards.
                     if self._owns_notifier:
                         self._write_future = asyncio.get_running_loop().create_future()
 
@@ -168,7 +238,6 @@ class DeviceWriter:
 
                     self.logger.debug("Write command sent, waiting for response...")
 
-                    # Wait for write response/acknowledgment
                     try:
                         response = await asyncio.wait_for(self._write_future, timeout=5)
                         self.logger.debug("Write response received: %s", response.hex())
@@ -184,7 +253,6 @@ class DeviceWriter:
                 return False
             except BleakError as err:
                 self.logger.warning("Bleak error: %s", err)
-                # Connection may be lost, mark as disconnected
                 self._connected = False
                 return False
             except BaseException as err:

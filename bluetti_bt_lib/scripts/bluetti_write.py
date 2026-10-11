@@ -1,13 +1,18 @@
+
 """Bluetti write command."""
 
 import argparse
 import asyncio
 import logging
 from typing import Any
+
 from bleak import BleakClient
 
 from ..bluetooth import DeviceWriter, DeviceWriterConfig
+from ..bluetooth.device_reader import DeviceReader, DeviceReaderConfig
+from ..devices.charger2 import CHARGER2
 from ..utils.device_builder import build_device
+from bleak.exc import BleakError
 
 
 async def async_write(
@@ -22,11 +27,59 @@ async def async_write(
 
     print("Client created")
 
-    writer = DeviceWriter(
-        client,
-        built,
-        DeviceWriterConfig(use_encryption=encryption),
-    )
+    control_fields = {
+        "ctrl_system_on_off",
+        "ctrl_silent_charging",
+    }
+    needs_reader = isinstance(built, CHARGER2) and field in control_fields
+
+    if needs_reader:
+        # The reader and writer must share one BLE connection and lock.
+        polling_lock = asyncio.Lock()
+
+        reader = DeviceReader(
+            address,
+            built,
+            asyncio.Future,
+            DeviceReaderConfig(use_encryption=encryption),
+            lock=polling_lock,
+            ble_client=client,
+        )
+
+        print("Reader created")
+
+        # Connect the shared BLE client before the reader sets up notifications.
+        try:
+            async with polling_lock:
+                if not client.is_connected:
+                    await client.connect()
+
+                if not await reader.connect():
+                    print("Unable to connect to device")
+                    await client.disconnect()
+                    return
+        except BleakError as err:
+            print(f"Unable to connect to device: {err}")
+            return
+
+        writer = DeviceWriter(
+            client,
+            built,
+            DeviceWriterConfig(use_encryption=encryption),
+            lock=polling_lock,
+            reader=reader,
+        )
+
+        # Reuse the reader's notification handler and encryption session.
+        writer.attach(reader.encryption)
+
+    else:
+        # Preserve the existing path for other devices and fields.
+        writer = DeviceWriter(
+            client,
+            built,
+            DeviceWriterConfig(use_encryption=encryption),
+        )
 
     print("Writer created")
 
@@ -70,7 +123,7 @@ def start():
     if args.off is not None:
         value = False
 
-    if args.value:
+    if args.value is not None:
         value = args.value
 
     if args.select:

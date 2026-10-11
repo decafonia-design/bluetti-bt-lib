@@ -232,6 +232,49 @@ class DeviceReader:
 
             return parsed_data
 
+    async def read_locked(
+        self, only_registers: List[ReadableRegisters], raw: bool = False
+    ) -> dict | None:
+        """Read selected registers while the caller holds polling_lock."""
+        parsed_data: dict = {}
+
+        try:
+            async with async_timeout.timeout(self.config.timeout):
+                if not self._connected:
+                    if not await self.connect():
+                        return None
+
+                if self.config.use_encryption:
+                    while not self.encryption.is_ready_for_commands:
+                        await asyncio.sleep(1)
+
+                for register in only_registers:
+                    body = register.parse_response(
+                        await self._async_send_command(register)
+                    )
+
+                    if raw:
+                        parsed_data[register.starting_address] = body
+                    else:
+                        parsed_data.update(
+                            self.bluetti_device.parse(
+                                register.starting_address, body
+                            )
+                        )
+
+        except TimeoutError:
+            self.logger.warning("Timeout reading selected registers")
+            return None
+        except BleakError as err:
+            self.logger.warning("Bleak error reading selected registers: %s", err)
+            self._connected = False
+            return None
+        except BaseException as err:
+            self.logger.warning("Error reading selected registers: %s", err)
+            return None
+
+        return parsed_data or None
+
     async def _async_send_command(self, registers: DeviceRegister) -> bytes:
         """Send command and return response"""
         self.current_registers = registers
