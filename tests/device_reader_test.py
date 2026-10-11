@@ -62,3 +62,29 @@ class TestDeviceReader(unittest.IsolatedAsyncioTestCase):
         data = await reader.read()
 
         self.assertIsNone(data.get(FieldName.BATTERY_SOC.value))
+
+    async def test_failed_notify_setup_is_cleaned_up(self):
+        device = BaseDeviceV1()
+        reader = DeviceReader(
+            "00:11:00:11:00:11",
+            device,
+            asyncio.Future,
+            ble_client=self.ble_mock,
+            lock=asyncio.Lock(),
+        )
+
+        original_start_notify = self.ble_mock.start_notify
+
+        async def start_notify_then_fail(char_specifier, callback, **kwargs):
+            await original_start_notify(char_specifier, callback, **kwargs)
+            raise RuntimeError("Simulated notification setup failure")
+
+        self.ble_mock.start_notify = start_notify_then_fail
+
+        self.assertFalse(await reader.connect())
+        self.assertIsNotNone(self.ble_mock._callback)
+
+        await reader.disconnect()
+
+        self.assertIsNone(self.ble_mock._callback)
+        self.assertTrue(self.ble_mock.is_connected)
