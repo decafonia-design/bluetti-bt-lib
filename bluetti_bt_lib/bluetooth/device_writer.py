@@ -335,6 +335,17 @@ class DeviceWriter:
                             return WriteVerificationResult(True, False)
 
                         actual_word = struct.unpack("!H", raw_word)[0]
+
+                        self.logger.warning(
+                            "Charger 2 register 15600 read-back: "
+                            "raw=%s decoded=0x%04X expected_field=%s "
+                            "requested=%r",
+                            raw_word.hex(),
+                            actual_word,
+                            field,
+                            value,
+                        )
+
                         if actual_word not in CHARGER2_CONTROL_STATES:
                             self.logger.warning(
                                 "Unknown Charger 2 read-back value: 0x%04X",
