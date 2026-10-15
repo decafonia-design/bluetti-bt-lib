@@ -338,7 +338,7 @@ class DeviceWriter:
 
                         actual_word = struct.unpack("!H", raw_word)[0]
 
-                        self.logger.warning(
+                        self.logger.debug(
                             "Charger 2 register 15600 read-back: "
                             "raw=%s decoded=0x%04X expected_field=%s "
                             "requested=%r",

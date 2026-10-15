@@ -1,5 +1,5 @@
 # bluetti-bt-lib
-Inofficial Library for basic communication to bluetti powerstations.
+Unofficial Library for basic communication to Bluetti powerstations.
 Core functions based on https://github.com/warhammerkid/bluetti_mqtt
 
 The current [Roadmap for this project and repositories using this library can be found here](https://github.com/users/Patrick762/projects/4)
@@ -55,14 +55,17 @@ Added and mostly validated by contributors (some are moved here from the HA Inte
 
 ## Controls
 
-Validated:
+AP300 and Charger 2 Controls Validated by [@sidieje](https://github.com/sidieje):
 
-|Device Name|ctrl_ac|ctrl_dc|
-|-----------|-------|-------|
-|EB3A       |✅     |✅     |
-|EP600      |✅     |❌     |
+|Device Name|ctrl_ac|ctrl_dc|ctrl_ups_mode|ctrl_system_on_off|ctrl_silent_charging|
+|-----------|-------|-------|-------------|------------------|---------------------|
+|EB3A       |✅     |✅     |❌           |❌                |❌                   |
+|EP600      |✅     |❌     |❌           |❌                |❌                   |
+|AP300      |✅     |✅     |✅           |❌                |❌                   |
+|Charger 2  |❌     |❌     |❌           |✅                |✅                   |
 
 Added and mostly validated by contributors:
+
 |Device Name|Contributor                                              |ctrl_ac|ctrl_dc|ctrl_ups_mode|soc_range_start|soc_range_end|
 |-----------|---------------------------------------------------------|-------|-------|-------------|---------------|-------------|
 |AC200L     |bluetti-mqtt, [@seaburger](https://github.com/seaburger) |✅     |✅     |✅           |❌             |❌           |
