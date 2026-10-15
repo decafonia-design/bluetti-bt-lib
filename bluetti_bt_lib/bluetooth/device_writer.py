@@ -314,6 +314,11 @@ class DeviceWriter:
                     if not write_succeeded:
                         return WriteVerificationResult(False, False)
 
+                    # Allow the device time to apply the write before verification.
+                    await asyncio.sleep(0.5)
+
+                    # Read back only the register(s) containing the requested field.
+
                     # Read back only the register(s) containing the requested field.
                     if is_shared_control:
                         raw_data = await self.reader.read_locked(
