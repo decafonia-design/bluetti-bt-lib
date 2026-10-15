@@ -38,7 +38,13 @@ class TestCharger2Writer(unittest.IsolatedAsyncioTestCase):
             command = bytes(data)
             if len(command) >= 2 and command[1] == 6:
                 self.writes.append(command)
+
+                # Simulate the device applying the register write without
+                # sending a notification to the reader.
+                address, value = struct.unpack_from("!HH", command, 2)
+                self.client.add_r_int(address, value)
                 return
+
             await original_write(char_specifier, data, response)
 
         self.client.write_gatt_char = capture_write
@@ -108,6 +114,64 @@ class TestCharger2Writer(unittest.IsolatedAsyncioTestCase):
 
         self.assertFalse(result)
         self.assertEqual(self.writes, [])
+
+    async def test_verified_control_write_returns_readback_state(self):
+        self.client.add_r_int(15600, 0xAA2A)
+
+        result = await self.writer.write_verified(
+            "ctrl_system_on_off", True
+        )
+
+        self.assertTrue(result.write_succeeded)
+        self.assertTrue(result.readback_succeeded)
+        self.assertTrue(result.verified)
+        self.assertIsNotNone(result.values)
+        self.assertTrue(result.values["ctrl_system_on_off"])
+        self.assertFalse(result.values["ctrl_silent_charging"])
+        self.assertEqual(len(self.writes), 1)
+
+    async def test_verified_write_reports_readback_failure(self):
+        self.client.add_r_int(15600, 0xAA2A)
+
+        original_read_locked = self.reader.read_locked
+        read_count = 0
+
+        async def fail_second_read(*args, **kwargs):
+            nonlocal read_count
+            read_count += 1
+            if read_count == 2:
+                return {}
+            return await original_read_locked(*args, **kwargs)
+
+        self.reader.read_locked = fail_second_read
+
+        result = await self.writer.write_verified(
+            "ctrl_system_on_off", True
+        )
+
+        self.assertTrue(result.write_succeeded)
+        self.assertFalse(result.readback_succeeded)
+        self.assertFalse(result.verified)
+        self.assertIsNone(result.values)
+        self.assertEqual(len(self.writes), 1)
+
+    async def test_verified_write_reports_state_mismatch(self):
+        self.client.add_r_int(15600, 0xAA2A)
+
+        # Allow the initial register value to be set, but simulate the device
+        # not applying the subsequent write.
+        self.client.add_r_int = lambda register, value: None
+
+        result = await self.writer.write_verified(
+            "ctrl_system_on_off", True
+        )
+
+        self.assertTrue(result.write_succeeded)
+        self.assertTrue(result.readback_succeeded)
+        self.assertFalse(result.verified)
+        self.assertFalse(result.values["ctrl_system_on_off"])
+        self.assertFalse(result.values["ctrl_silent_charging"])
+        self.assertEqual(len(self.writes), 1)
 
 
 if __name__ == "__main__":

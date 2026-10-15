@@ -2,6 +2,7 @@ import asyncio
 import logging
 import struct
 from typing import Any
+from dataclasses import dataclass
 
 import async_timeout
 from bleak import BleakClient
@@ -15,6 +16,14 @@ from .device_reader import DeviceReader
 from ..registers import ReadableRegisters, WriteableRegister
 from ..devices.charger2 import CHARGER2, CHARGER2_CONTROL_STATES
 
+@dataclass
+class WriteVerificationResult:
+    """Result of writing a field and reading its state back from the device."""
+
+    write_succeeded: bool
+    readback_succeeded: bool
+    values: dict[str, Any] | None = None
+    verified: bool = False
 
 class DeviceWriterConfig:
     def __init__(self, timeout: int = 15, use_encryption: bool = False):
@@ -127,73 +136,121 @@ class DeviceWriter:
             self.encryption_ready.clear()
             self._connected = False
 
-    async def write(self, field: str, value: Any):
-        available_fields = [f.name for f in self.bluetti_device.fields]
-        if field not in available_fields:
-            self.logger.error("Field not supported")
-            return False
+
+    async def write(self, field: str, value: Any) -> bool:
+        """Write a field, retaining the existing boolean API."""
+        return await self._write(field, value, verify=False)
+
+    async def write_verified(
+        self, field: str, value: Any
+    ) -> WriteVerificationResult:
+        """Write a field and read back its actual device state."""
+        result = await self._write(field, value, verify=True)
+        assert isinstance(result, WriteVerificationResult)
+        return result
+
+    async def _write(
+        self, field: str, value: Any, verify: bool
+    ) -> bool | WriteVerificationResult:
+        available_fields = {f.name: f for f in self.bluetti_device.fields}
+        field_obj = available_fields.get(field)
+
+        if field_obj is None:
+            self.logger.error("Field not supported: %s", field)
+            return (
+                WriteVerificationResult(False, False)
+                if verify
+                else False
+            )
+
+        if verify and self.reader is None:
+            self.logger.error("Verified writes require a DeviceReader")
+            return WriteVerificationResult(False, False)
 
         control_fields = {
             "ctrl_system_on_off": 0,
             "ctrl_silent_charging": 1,
         }
         is_shared_control = (
-            isinstance(self.bluetti_device, CHARGER2) and field in control_fields
+            isinstance(self.bluetti_device, CHARGER2)
+            and field in control_fields
         )
 
         if is_shared_control:
             if not isinstance(value, bool):
                 self.logger.error("Charger 2 control value must be bool")
-                return False
+                return (
+                    WriteVerificationResult(False, False)
+                    if verify
+                    else False
+                )
             if self.reader is None:
                 self.logger.error(
                     "Charger 2 control requires a reader for register 15600"
                 )
-                return False
+                return (
+                    WriteVerificationResult(False, False)
+                    if verify
+                    else False
+                )
             command = None
         else:
             command = self.bluetti_device.build_write_command(field, value)
             if command is None:
-                self.logger.error("Field is not writeable")
-                return False
+                self.logger.error("Field is not writeable: %s", field)
+                return (
+                    WriteVerificationResult(False, False)
+                    if verify
+                    else False
+                )
 
-        self.logger.debug("Writing to device register")
+        write_succeeded = False
 
         async with self.polling_lock:
             try:
                 async with async_timeout.timeout(self.config.timeout):
                     if not self._connected:
                         if not await self.connect():
-                            return False
+                            return (
+                                WriteVerificationResult(False, False)
+                                if verify
+                                else False
+                            )
 
-                    self.logger.debug("Connected to device")
+                    if verify and self.config.use_encryption:
+                        while not self.reader.encryption.is_ready_for_commands:
+                            await asyncio.sleep(0.1)
 
                     if is_shared_control:
                         raw_data = await self.reader.read_locked(
                             [ReadableRegisters(15600, 1)],
                             raw=True,
                         )
-                        if not raw_data or 15600 not in raw_data:
-                            self.logger.warning(
-                                "Unable to read Charger 2 control register 15600"
-                            )
-                            return False
+                        raw_word = raw_data.get(15600) if raw_data else None
 
-                        raw_word = raw_data[15600]
-                        if len(raw_word) != 2:
+                        if raw_word is None or len(raw_word) != 2:
                             self.logger.warning(
-                                "Invalid response for Charger 2 register 15600"
+                                "Unable to read valid Charger 2 register 15600"
                             )
-                            return False
+                            return (
+                                WriteVerificationResult(False, False)
+                                if verify
+                                else False
+                            )
 
                         current_word = struct.unpack("!H", raw_word)[0]
                         current_state = CHARGER2_CONTROL_STATES.get(current_word)
+
                         if current_state is None:
                             self.logger.warning(
                                 "Unknown Charger 2 control value: 0x%04X",
                                 current_word,
                             )
-                            return False
+                            return (
+                                WriteVerificationResult(False, False)
+                                if verify
+                                else False
+                            )
 
                         state = list(current_state)
                         state[control_fields[field]] = value
@@ -213,7 +270,11 @@ class DeviceWriter:
                                 "No Charger 2 register value for state %s",
                                 new_state,
                             )
-                            return False
+                            return (
+                                WriteVerificationResult(False, False)
+                                if verify
+                                else False
+                            )
 
                         command = WriteableRegister(15600, new_word)
 
@@ -228,36 +289,112 @@ class DeviceWriter:
                     self.logger.debug("Writing command: %s", command)
 
                     if self._owns_notifier:
-                        self._write_future = asyncio.get_running_loop().create_future()
+                        self._write_future = (
+                            asyncio.get_running_loop().create_future()
+                        )
 
                     await self.client.write_gatt_char(WRITE_UUID, command_bytes)
+                    write_succeeded = True
 
-                    if self._write_future is None:
-                        self.logger.debug("Write successful")
-                        return True
+                    if self._write_future is not None:
+                        try:
+                            response = await asyncio.wait_for(
+                                self._write_future, timeout=5
+                            )
+                            self.logger.debug(
+                                "Write response received: %s", response.hex()
+                            )
+                        except asyncio.TimeoutError:
+                            self.logger.warning("Write response timeout")
+                            write_succeeded = False
 
-                    self.logger.debug("Write command sent, waiting for response...")
+                    if not verify:
+                        return write_succeeded
 
-                    try:
-                        response = await asyncio.wait_for(self._write_future, timeout=5)
-                        self.logger.debug("Write response received: %s", response.hex())
-                    except asyncio.TimeoutError:
-                        self.logger.warning("Write response timeout")
-                        return False
+                    if not write_succeeded:
+                        return WriteVerificationResult(False, False)
 
-                    self.logger.debug("Write successful")
-                    return True
+                    # Read back only the register(s) containing the requested field.
+                    if is_shared_control:
+                        raw_data = await self.reader.read_locked(
+                            [ReadableRegisters(15600, 1)],
+                            raw=True,
+                        )
+                        raw_word = raw_data.get(15600) if raw_data else None
+
+                        if raw_word is None or len(raw_word) != 2:
+                            self.logger.warning(
+                                "Charger 2 write sent, but register 15600 "
+                                "could not be read back"
+                            )
+                            return WriteVerificationResult(True, False)
+
+                        actual_word = struct.unpack("!H", raw_word)[0]
+                        if actual_word not in CHARGER2_CONTROL_STATES:
+                            self.logger.warning(
+                                "Unknown Charger 2 read-back value: 0x%04X",
+                                actual_word,
+                            )
+                            return WriteVerificationResult(True, False)
+
+                        values = self.bluetti_device.parse(15600, raw_word)
+                    else:
+                        values = await self.reader.read_locked(
+                            [
+                                ReadableRegisters(
+                                    field_obj.address, field_obj.size
+                                )
+                            ],
+                        )
+
+                        if not values or field not in values:
+                            self.logger.warning(
+                                "Write sent, but field %s could not be read back",
+                                field,
+                            )
+                            return WriteVerificationResult(True, False)
+
+                    actual_value = values.get(field)
+                    verified = actual_value == value
+
+                    if not verified:
+                        self.logger.warning(
+                            "Write read-back mismatch for %s: requested %r, "
+                            "device reports %r",
+                            field,
+                            value,
+                            actual_value,
+                        )
+
+                    return WriteVerificationResult(
+                        write_succeeded=True,
+                        readback_succeeded=True,
+                        values=values,
+                        verified=verified,
+                    )
 
             except TimeoutError:
-                self.logger.warning("Timeout")
-                return False
+                self.logger.warning("Timeout during write or verification")
+                return (
+                    WriteVerificationResult(write_succeeded, False)
+                    if verify
+                    else False
+                )
             except BleakError as err:
                 self.logger.warning("Bleak error: %s", err)
                 self._connected = False
-                return False
-            except BaseException as err:
-                self.logger.warning("Unknown error: %s", err)
-                return False
+                return (
+                    WriteVerificationResult(write_succeeded, False)
+                    if verify
+                    else False
+                )
+            except Exception as err:
+                self.logger.warning("Error during write or verification: %s", err)
+                return (
+                    WriteVerificationResult(write_succeeded, False)
+                    if verify
+                    else False
+                )
             finally:
                 self._write_future = None
 
