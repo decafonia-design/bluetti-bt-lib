@@ -315,7 +315,9 @@ class DeviceWriter:
                         return WriteVerificationResult(False, False)
 
                     # Allow the device time to apply the write before verification.
-                    await asyncio.sleep(0.5)
+                    # Charger 2 shared controls need longer before reading register 15600 back.
+                    verification_delay = 1.5 if is_shared_control else 0.5
+                    await asyncio.sleep(verification_delay)
 
                     # Read back only the register(s) containing the requested field.
 
