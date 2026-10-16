@@ -102,6 +102,7 @@ class CHARGER2(BaseDeviceV2):
                 SwapStringField(FieldName.DEVICE_TYPE, 15500, 6),
                 SerialNumberField(FieldName.DEVICE_SN, 15506),
             ],
+            include_common_fields=False,
         )
 
     def build_write_command(self, name: str, value):

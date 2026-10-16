@@ -12,14 +12,20 @@ class BaseDeviceV2(BluettiDevice):
         additional_fields: List[DeviceField] = [],
         pack_fields: List[DeviceField] = [],
         max_packs: int = 0,
+        include_common_fields: bool = True,
     ):
-        super().__init__(
+        common_fields = (
             [
                 SwapStringField(FieldName.DEVICE_TYPE, 110, 6),
                 SerialNumberField(FieldName.DEVICE_SN, 116),
                 UIntField(FieldName.BATTERY_SOC, 102, min=0, max=100),
             ]
-            + additional_fields,
+            if include_common_fields
+            else []
+        )
+
+        super().__init__(
+            common_fields + additional_fields,
             pack_fields,
             max_packs,
         )
