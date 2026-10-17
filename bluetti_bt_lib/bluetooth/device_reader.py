@@ -46,6 +46,9 @@ class DeviceReader:
         self.client = None
 
         self.has_notifier = False
+        self._notified_client = None
+        """Client whose notify subscription is confirmed live. Only set
+        after start_notify() succeeds, so a failed setup is retried."""
         self.current_registers = None
         self.notify_response = bytearray()
         self.notify_future: asyncio.Future[Any] | None = None
@@ -86,11 +89,19 @@ class DeviceReader:
                     max_attempts=10,
                 )
 
-            if not self.has_notifier:
+            # _notified_client tracks the client whose subscription is
+            # confirmed live. has_notifier records that a subscription
+            # exists (or may exist) on the current client so disconnect()
+            # can stop it even when start_notify() raised after already
+            # registering the callback. Because _notified_client is only
+            # set on success, a failed setup is retried by the next
+            # connect() instead of being skipped as already subscribed.
+            if self.client is not self._notified_client:
                 self.has_notifier = True
                 await self.client.start_notify(
                     NOTIFY_UUID, self._notification_handler
                 )
+                self._notified_client = self.client
 
             self.logger.debug("Connected to device")
 
@@ -106,6 +117,12 @@ class DeviceReader:
             self.logger.warning("Bleak error during connect: %s", err)
             await self._cleanup_failed_connect()
             return False
+        except asyncio.CancelledError:
+            # Home Assistant cancels tasks on reload/unload. Tear down
+            # whatever we started, then let the cancellation propagate
+            # instead of reporting it as an ordinary connection failure.
+            await self._cleanup_failed_connect()
+            raise
         except BaseException as err:
             self.logger.warning("Unknown error during connect: %s", err)
             await self._cleanup_failed_connect()
@@ -124,6 +141,7 @@ class DeviceReader:
         """
         self._connected = False
         self.has_notifier = False
+        self._notified_client = None
         self.encryption.reset()
         self.encrypted_buffer.clear()
 
@@ -155,6 +173,7 @@ class DeviceReader:
             except Exception:
                 pass
             self.has_notifier = False
+            self._notified_client = None
 
         if self.client and self.client.is_connected:
             try:
@@ -175,6 +194,7 @@ class DeviceReader:
                 except Exception:
                     pass
                 self.has_notifier = False
+                self._notified_client = None
 
             # Only disconnect clients created and managed by this reader.
             # A supplied ble_client belongs to the caller.
@@ -283,6 +303,14 @@ class DeviceReader:
                 # and encryption handshake.
                 await self._mark_disconnected()
                 return None
+            except asyncio.CancelledError:
+                # External cancellation (e.g. HA reload/unload); the
+                # connection state is now uncertain, so drop it and let
+                # the cancellation propagate. The timeout above is
+                # converted to TimeoutError by async_timeout before it
+                # can reach this handler.
+                await self._mark_disconnected()
+                raise
             except BaseException as err:
                 self.logger.warning("Unknown error %s", err)
                 return None
@@ -332,6 +360,9 @@ class DeviceReader:
             # reconnects from scratch.
             await self._mark_disconnected()
             return None
+        except asyncio.CancelledError:
+            await self._mark_disconnected()
+            raise
         except BaseException as err:
             self.logger.warning("Error reading selected registers: %s", err)
             return None
