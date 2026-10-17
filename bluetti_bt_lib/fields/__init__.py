@@ -13,5 +13,6 @@ from .StringField import *
 from .SwapStringField import *
 from .SwitchField import *
 from .UIntField import *
+from .NumberField import *
 from .VersionField import *
 from .SignedDecimalField import SignedDecimalField
