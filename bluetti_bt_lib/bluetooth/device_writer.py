@@ -380,9 +380,19 @@ class DeviceWriter:
                     # Allow the device time to apply the write before verification.
                     # Charger 2 shared controls need longer before reading register 15600 back.
                     verification_delay = 1.5 if is_shared_control else 0.5
+                    self.logger.debug(
+                        "Write verification: device_class=%s field=%s "
+                        "is_shared_control=%s delay=%.1fs",
+                        type(self.bluetti_device).__name__,
+                        field,
+                        is_shared_control,
+                        verification_delay,
+                    )
                     await asyncio.sleep(verification_delay)
-
-                    # Read back only the register(s) containing the requested field.
+                    self.logger.debug(
+                        "Write verification delay elapsed for %s; reading back",
+                        field,
+                    )
 
                     # Read back only the register(s) containing the requested field.
                     if is_shared_control:
@@ -437,6 +447,14 @@ class DeviceWriter:
 
                     actual_value = values.get(field)
                     verified = actual_value == value
+
+                    self.logger.debug(
+                        "Write verification result for %s: requested %r, "
+                        "device reports %r",
+                        field,
+                        value,
+                        actual_value,
+                    )
 
                     if not verified:
                         self.logger.warning(
