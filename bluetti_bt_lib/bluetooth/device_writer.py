@@ -379,7 +379,7 @@ class DeviceWriter:
 
                     # Allow the device time to apply the write before verification.
                     # Charger 2 shared controls need longer before reading register 15600 back.
-                    verification_delay = 1.5 if is_shared_control else 0.5
+                    verification_delay = 2.0 if is_shared_control else 0.5
                     self.logger.debug(
                         "Write verification: device_class=%s field=%s "
                         "is_shared_control=%s delay=%.1fs",
