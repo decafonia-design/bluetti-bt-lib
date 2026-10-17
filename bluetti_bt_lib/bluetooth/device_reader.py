@@ -307,8 +307,8 @@ class DeviceReader:
             self.logger.debug("Got response")
 
             return cast(bytes, res)
-        except:
-            self.logger.warning("Error while reading data")
+        except Exception:
+            self.logger.warning("Error while reading data", exc_info=True)
 
         return bytes()
 
