@@ -114,6 +114,8 @@ class BluettiDevice:
         elif isinstance(field, NumberField):
             if not field.allowed_write_type(value) or not field.in_range(value):
                 return None
+            if field.step and int(value) % field.step != 0:
+                return None
             value = int(value)
 
         return WriteableRegister(field.address, value)

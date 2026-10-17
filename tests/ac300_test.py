@@ -23,9 +23,17 @@ class TestAC300(unittest.TestCase):
         self.assertIsInstance(end, NumberField)
         self.assertTrue(start.is_writeable())
         self.assertTrue(end.is_writeable())
+        self.assertEqual(start.step, 5)
+        self.assertEqual(end.step, 5)
 
         self.assertEqual(self.device.build_write_command("soc_range_start", 30).value, 30)
         self.assertEqual(self.device.build_write_command("soc_range_end", 90).value, 90)
+
+    def test_soc_range_rejects_off_step_values(self):
+        # 5% increments: off-step values must be rejected so a service
+        # call cannot bypass the intended increments.
+        self.assertIsNone(self.device.build_write_command("soc_range_start", 32))
+        self.assertIsNone(self.device.build_write_command("soc_range_end", 91))
 
     def test_soc_range_rejects_out_of_range_and_bool(self):
         self.assertIsNone(self.device.build_write_command("soc_range_start", 150))

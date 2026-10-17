@@ -35,8 +35,8 @@ class AC300(BaseDeviceV1):
                 SwitchField(FieldName.CTRL_DC, 3008),
                 SwitchField(FieldName.CTRL_GRID_CHARGE_ON, 3011),
                 SwitchField(FieldName.CTRL_TIME_CONTROL_ON, 3013),
-                NumberField(FieldName.BATTERY_SOC_RANGE_START, 3015, 1, 0, 100),
-                NumberField(FieldName.BATTERY_SOC_RANGE_END, 3016, 1, 0, 100),
+                NumberField(FieldName.BATTERY_SOC_RANGE_START, 3015, 1, 0, 100, 5),
+                NumberField(FieldName.BATTERY_SOC_RANGE_END, 3016, 1, 0, 100, 5),
                 # SelectField(FieldName.CTRL_DISPLAY_TIMEOUT, 3061, DisplayMode),
             ],
             [
