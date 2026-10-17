@@ -2,6 +2,8 @@ import asyncio
 import time
 import unittest
 
+from bleak.exc import BleakError
+
 from bluetti_bt_lib.bluetooth import DeviceWriter, DeviceWriterConfig
 from bluetti_bt_lib.bluetooth.encryption import BluettiEncryption
 from bluetti_bt_lib.devices.ac180 import AC180
@@ -98,3 +100,66 @@ class TestDeviceWriter(unittest.IsolatedAsyncioTestCase):
 
         self.assertIsNone(writer.encryption.secure_aes_key)
         self.assertFalse(self.ble_mock.is_connected)
+
+    async def test_standalone_reconnect_resubscribes_notifier(self):
+        notify_calls = 0
+        original_start_notify = self.ble_mock.start_notify
+
+        async def counting_start_notify(*args, **kwargs):
+            nonlocal notify_calls
+            notify_calls += 1
+            await original_start_notify(*args, **kwargs)
+
+        self.ble_mock.start_notify = counting_start_notify
+
+        # The mock never completes the key exchange, so each connect()
+        # attempt fails at the handshake wait. Every attempt must still
+        # (re-)subscribe the notifier instead of trusting stale
+        # ownership state left over from the previous connection.
+        writer = DeviceWriter(
+            self.ble_mock,
+            self.device,
+            DeviceWriterConfig(timeout=1, use_encryption=True),
+            asyncio.Lock(),
+        )
+
+        self.assertFalse(await writer.connect())
+        self.assertFalse(writer._owns_notifier)
+        self.assertFalse(await writer.connect())
+
+        self.assertEqual(notify_calls, 2)
+
+    async def test_write_bleak_error_clears_notifier_ownership(self):
+        writer = DeviceWriter(
+            self.ble_mock,
+            self.device,
+            DeviceWriterConfig(timeout=5, use_encryption=True),
+            asyncio.Lock(),
+        )
+
+        original_start_notify = self.ble_mock.start_notify
+
+        async def start_notify_completes_handshake(char, callback, **kwargs):
+            await original_start_notify(char, callback, **kwargs)
+            # Pretend the key exchange completed so connect() proceeds.
+            writer.encryption.secure_aes_key = b"0" * 16
+            writer.encryption_ready.set()
+
+        self.ble_mock.start_notify = start_notify_completes_handshake
+
+        self.assertTrue(await writer.connect())
+        self.assertTrue(writer._owns_notifier)
+
+        async def write_drops_connection(*args, **kwargs):
+            raise BleakError("connection dropped")
+
+        self.ble_mock.write_gatt_char = write_drops_connection
+
+        result = await writer.write(FieldName.CTRL_AC.value, True)
+
+        self.assertFalse(result)
+        self.assertFalse(writer._connected)
+        # Ownership must be forgotten so the next connect() re-subscribes
+        # the notifier for the new connection lifecycle.
+        self.assertFalse(writer._owns_notifier)
+        self.assertFalse(writer.has_notifier)

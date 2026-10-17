@@ -97,7 +97,18 @@ class DeviceWriter:
                 self.logger.debug("Connecting to device")
                 await self.client.connect()
 
-            if self.config.use_encryption and not self._owns_notifier:
+            if (
+                self.config.use_encryption
+                and not self._attached
+                and not self._owns_notifier
+            ):
+                # An attached writer never owns a notifier: the reader
+                # owns the subscription and the handshake on the shared
+                # connection. A standalone writer must (re-)subscribe on
+                # every new connection: reconnecting reopens the GATT
+                # connection on the same client object, so the previous
+                # subscription and handshake are gone even though the
+                # Python object identity has not changed.
                 self.encryption_ready.clear()
                 await self.client.start_notify(
                     NOTIFY_UUID, self._notification_handler
@@ -115,10 +126,46 @@ class DeviceWriter:
 
         except BleakError as err:
             self.logger.warning("Bleak error during connect: %s", err)
+            await self._mark_disconnected()
             return False
+        except asyncio.CancelledError:
+            # Propagate cancellation (HA reload/unload) after tearing
+            # down whatever this connect attempt started.
+            await self._mark_disconnected()
+            raise
         except BaseException as err:
             self.logger.warning("Unknown error during connect: %s", err)
+            await self._mark_disconnected()
             return False
+
+    async def _mark_disconnected(self) -> None:
+        """Forget a dropped or half-established connection.
+
+        Reconnecting reopens the GATT connection on the same client
+        object, so the notify subscription and the encryption handshake
+        are gone with it even though the Python object identity has not
+        changed. A standalone writer must therefore re-subscribe and
+        re-run the handshake on the next connect(), so its notifier
+        ownership state and session are cleared here. An attached
+        writer leaves the reader's notifier, session and client alone.
+        """
+        self._connected = False
+
+        if self._attached:
+            return
+
+        self.has_notifier = False
+        self._owns_notifier = False
+        if not self._borrowed_encryption:
+            self.encryption.reset()
+        self.encrypted_buffer.clear()
+        self.encryption_ready.clear()
+
+        if self.client and self.client.is_connected:
+            try:
+                await self.client.disconnect()
+            except Exception:
+                pass
 
     async def disconnect(self):
         """Disconnect from the device."""
@@ -416,7 +463,10 @@ class DeviceWriter:
                 )
             except BleakError as err:
                 self.logger.warning("Bleak error: %s", err)
-                self._connected = False
+                # Drop all per-connection state (standalone writer) so
+                # the next write() reconnects, re-subscribes the
+                # notifier and re-runs the encryption handshake.
+                await self._mark_disconnected()
                 return (
                     WriteVerificationResult(write_succeeded, False)
                     if verify
