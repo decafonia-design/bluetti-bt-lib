@@ -52,6 +52,8 @@ class DeviceWriter:
         self._connected = False
         self._owns_notifier = False
         self._borrowed_encryption = False
+        self._attached = False
+        """True when the client belongs to a DeviceReader's shared connection."""
         self._write_future: asyncio.Future[bytes] | None = None
 
         self.logger = logging.getLogger(
@@ -66,8 +68,13 @@ class DeviceWriter:
         handshake) belongs to the reader, so the writer must not start a
         second one on the same characteristic and cannot wait for write
         acknowledgements it never receives.
+
+        The client itself belongs to the reader as well: disconnect() on
+        an attached writer leaves the shared connection alone for the
+        reader to tear down.
         """
         self._connected = True
+        self._attached = True
         if encryption is not None:
             # Share the session instead of copying keys, so both sides stay
             # in sync for the lifetime of the connection. It is not ours to
@@ -126,7 +133,15 @@ class DeviceWriter:
                     pass
                 self.has_notifier = False
 
-            if self.client and self.client.is_connected:
+            # Only disconnect clients that this writer established.
+            # When attached, the client belongs to the reader: pulling
+            # it down here would kill the reader's connection while the
+            # reader still believes it is connected.
+            if (
+                not self._attached
+                and self.client
+                and self.client.is_connected
+            ):
                 await self.client.disconnect()
                 self.logger.debug("Disconnected from device")
 
@@ -135,6 +150,7 @@ class DeviceWriter:
             self.encrypted_buffer.clear()
             self.encryption_ready.clear()
             self._connected = False
+            self._attached = False
 
 
     async def write(self, field: str, value: Any) -> bool:

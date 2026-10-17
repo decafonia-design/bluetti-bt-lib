@@ -78,6 +78,17 @@ class TestDeviceWriter(unittest.IsolatedAsyncioTestCase):
         self.assertIs(writer.encryption, encryption)
         self.assertEqual(encryption.secure_aes_key, b"0" * 16)
 
+    async def test_disconnect_attached_keeps_shared_client_connected(self):
+        writer = self.build_writer()
+        writer.attach()
+
+        await writer.disconnect()
+
+        # The client belongs to the reader's shared connection; the
+        # writer must not pull it down and leave the reader stranded.
+        self.assertTrue(self.ble_mock.is_connected)
+        self.assertFalse(writer._connected)
+
     async def test_disconnect_resets_own_session(self):
         writer = self.build_writer()
         await writer.connect()

@@ -104,10 +104,66 @@ class DeviceReader:
 
         except BleakError as err:
             self.logger.warning("Bleak error during connect: %s", err)
+            await self._cleanup_failed_connect()
             return False
         except BaseException as err:
             self.logger.warning("Unknown error during connect: %s", err)
+            await self._cleanup_failed_connect()
             return False
+
+    async def _mark_disconnected(self) -> None:
+        """Forget a connection that the device or the stack dropped.
+
+        The notify subscription and the encryption session are only valid
+        for the lifetime of a single connection, so they are cleared here
+        as well. Without this, the next connect() would see the stale
+        has_notifier flag, skip start_notify() on the replacement client
+        and then never receive a response again. The stale client is
+        disconnected too (when we own it) so a fresh connect cannot
+        stack a second connection on top of a half-dead one.
+        """
+        self._connected = False
+        self.has_notifier = False
+        self.encryption.reset()
+        self.encrypted_buffer.clear()
+
+        if self.ble_client is None and self.client and self.client.is_connected:
+            try:
+                await self.client.disconnect()
+            except Exception:
+                pass
+
+    async def _cleanup_failed_connect(self) -> None:
+        """Tear down a half-established connection.
+
+        If connect() fails after the client was created (for example the
+        encryption handshake never completed), leaving that client
+        connected would leak it: the next connect() would open a second
+        connection to the device instead of starting from a clean state.
+
+        A caller-supplied ble_client is not ours to tear down; the
+        caller cleans it up through disconnect().
+        """
+        if self.ble_client is not None:
+            return
+
+        self._connected = False
+
+        if self.has_notifier and self.client:
+            try:
+                await self.client.stop_notify(NOTIFY_UUID)
+            except Exception:
+                pass
+            self.has_notifier = False
+
+        if self.client and self.client.is_connected:
+            try:
+                await self.client.disconnect()
+            except Exception:
+                pass
+
+        self.encryption.reset()
+        self.encrypted_buffer.clear()
 
     async def disconnect(self):
         """Clean up the reader's notification and connection state."""
@@ -222,8 +278,10 @@ class DeviceReader:
                 return None
             except BleakError as err:
                 self.logger.warning("Bleak error: %s", err)
-                # Connection may be lost, mark as disconnected
-                self._connected = False
+                # Connection may be lost: drop all per-connection state so
+                # the next read() reconnects with a fresh client, notifier
+                # and encryption handshake.
+                await self._mark_disconnected()
                 return None
             except BaseException as err:
                 self.logger.warning("Unknown error %s", err)
@@ -270,7 +328,9 @@ class DeviceReader:
             return None
         except BleakError as err:
             self.logger.warning("Bleak error reading selected registers: %s", err)
-            self._connected = False
+            # Same recovery path as read(): the next read/read_locked()
+            # reconnects from scratch.
+            await self._mark_disconnected()
             return None
         except BaseException as err:
             self.logger.warning("Error reading selected registers: %s", err)
@@ -307,6 +367,13 @@ class DeviceReader:
             self.logger.debug("Got response")
 
             return cast(bytes, res)
+        except BleakError:
+            # A failed GATT write/notify almost always means the
+            # connection is gone. Propagate it so the caller's
+            # BleakError handler can drop the dead connection and
+            # reconnect on the next poll; swallowing it here would
+            # leave _connected stuck at True forever.
+            raise
         except Exception:
             self.logger.warning("Error while reading data", exc_info=True)
 
