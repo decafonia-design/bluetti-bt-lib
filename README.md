@@ -60,7 +60,7 @@ Added and mostly validated by contributors (some are moved here from the HA Inte
 
 **Validated**
 
-- AP300, EL100V2, EL10 and Charger 2 — [@sidieje](https://github.com/sidieje)
+- AC300, AP300, EL100V2, EL10 and Charger 2 — [@sidieje](https://github.com/sidieje)
 - AC200L — [@seaburger](https://github.com/seaburger)
 - EL30V2 — [@x3ccd4828](https://github.com/x3ccd4828)
 - Handsfree 2 — [@pablogiaccaglia](https://github.com/pablogiaccaglia)
@@ -68,24 +68,19 @@ Added and mostly validated by contributors (some are moved here from the HA Inte
 |Device Name|ctrl_ac|ctrl_dc|ctrl_ups_mode|ctrl_system_on_off|ctrl_silent_charging|
 |-----------|-------|-------|-------------|------------------|---------------------|
 |AC200L     |✅     |✅     |✅           |❌                |❌                   |
+|AC300      |✅     |✅     |✅           |❌                |❌                   |
+|AC500      |✅     |✅     |✅           |❌                |❌                   |
 |AP300      |✅     |✅     |✅           |❌                |❌                   |
 |Charger 2  |❌     |❌     |❌           |✅                |✅                   |
 |EB3A       |✅     |✅     |❌           |❌                |❌                   |
-|EL10       |✅     |✅     |✅           |❌                |❌                   |
+|EL10       |✅     |✅     |❌           |❌                |❌                   |
 |EL100mini  |✅     |✅     |✅           |❌                |❌                   |
 |EL100V2    |✅     |✅     |✅           |❌                |❌                   |
 |EL200V2    |✅     |✅     |✅           |❌                |❌                   |
-|EL30V2     |✅     |✅     |✅           |❌                |❌                   |
+|EL30V2     |✅     |✅     |❌           |❌                |❌                   |
 |EP600      |✅     |❌     |❌           |❌                |❌                   |
+|Handsfree 1|✅     |✅     |❌           |❌                |❌                   |
 |Handsfree 2|✅     |✅     |❌           |❌                |❌                   |
-
-Added and mostly validated by contributors:
-
-## Battery pack data
-
-|Device Name|voltage|battery_soc|cell_voltages|
-|-----------|-------|-----------|-------------|
-|AC300      |✅     |✅         |✅           |
 
 ## Installation
 
