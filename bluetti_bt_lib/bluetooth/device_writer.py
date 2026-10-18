@@ -18,7 +18,13 @@ from ..devices.charger2 import CHARGER2, CHARGER2_CONTROL_STATES
 
 @dataclass
 class WriteVerificationResult:
-    """Result of writing a field and reading its state back from the device."""
+    """Result of writing a field and reading its state back from the device.
+
+    ``verified`` is False when the read-back straight after the write did not
+    match. The device can still have applied the change - a busy poll can
+    return a stale register - so callers should read that as "not confirmed
+    yet" rather than "the write failed".
+    """
 
     write_succeeded: bool
     readback_succeeded: bool
@@ -37,11 +43,12 @@ def _select_verification_delay(field_obj, is_shared_control: bool) -> float:
     A field can declare its own delay in the device config (slow-to-apply
     settings such as the AC300 SOC range thresholds, and the 2s delay
     SelectField carries by default); otherwise Charger 2 shared controls use
-    the extended delay and everything else the short default.
+    the extended delay and everything else the short default. The short
+    default leaves room for a device that is busy serving other polls.
     """
     if field_obj is not None and field_obj.verification_delay is not None:
         return field_obj.verification_delay
-    return 2.0 if is_shared_control else 0.5
+    return 2.0 if is_shared_control else 0.7
 
 
 class DeviceWriter:
@@ -477,9 +484,14 @@ class DeviceWriter:
                     )
 
                     if not verified:
+                        # The device accepted the write; only the read-back
+                        # right after it disagreed. A device busy serving
+                        # other polls can return a stale register, and the
+                        # next poll usually shows the change.
                         self.logger.warning(
-                            "Write read-back mismatch for %s: requested %r, "
-                            "device reports %r",
+                            "Write of %s=%r was accepted, but the read-back "
+                            "just after it still reported %r; the change may "
+                            "only show up on the next poll",
                             field,
                             value,
                             actual_value,
