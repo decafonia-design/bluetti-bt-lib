@@ -42,3 +42,12 @@ class TestSelectField(unittest.TestCase):
     def test_write_type_invalid(self):
         field = SelectField(FieldName.AC_OUTPUT_MODE, 70, Dummy)
         self.assertFalse(field.allowed_write_type(Dummy2.VALUE_3))
+
+    def test_verification_delay(self):
+        # A select can declare a longer write-verification delay; the default
+        # stays unset so the writer picks its own delay.
+        field = SelectField(FieldName.AC_OUTPUT_MODE, 70, Dummy)
+        self.assertIsNone(field.verification_delay)
+
+        slow = SelectField(FieldName.AC_OUTPUT_MODE, 70, Dummy, verification_delay=2.0)
+        self.assertEqual(slow.verification_delay, 2.0)
