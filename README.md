@@ -46,6 +46,7 @@ Added and mostly validated by contributors (some are moved here from the HA Inte
 |EL30V2     |[@dgudim](https://github.com/dgudim)                                                   |✅                   |✅             |✅             |✅             |✅             |
 |EL100mini  |[@MadPB](https://github.com/MadPB)														|✅                   |✅             |✅             |✅             |✅             |
 |EL100V2    |[@seaburger](https://github.com/seaburger), [lesolas20](https://github.com/lesolas20)  |✅                   |✅             |✅             |✅             |✅             |
+|EL200V2    |[@nlimper](https://github.com/nlimper)                                                 |✅                   |✅             |✅             |✅             |✅             |
 |EP500      |bluetti-mqtt                                                                           |✅                   |✅             |✅             |✅             |✅             |
 |EP500P     |bluetti-mqtt                                                                           |✅                   |✅             |✅             |✅             |✅             |
 |EP760      |[@Apfuntimes](https://github.com/Apfuntimes)                                           |✅                   |PV             |Grid           |❌             |AC Phases      |
@@ -73,6 +74,7 @@ Added and mostly validated by contributors (some are moved here from the HA Inte
 |EL10       |✅     |✅     |✅           |❌                |❌                   |
 |EL100mini  |✅     |✅     |✅           |❌                |❌                   |
 |EL100V2    |✅     |✅     |✅           |❌                |❌                   |
+|EL200V2    |✅     |✅     |✅           |❌                |❌                   |
 |EL30V2     |✅     |✅     |✅           |❌                |❌                   |
 |EP600      |✅     |❌     |❌           |❌                |❌                   |
 |Handsfree 2|✅     |✅     |❌           |❌                |❌                   |
