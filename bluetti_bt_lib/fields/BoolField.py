@@ -4,8 +4,13 @@ from . import DeviceField, FieldName
 
 
 class BoolField(DeviceField):
-    def __init__(self, name: FieldName, address: int):
-        super().__init__(name, address, 1)
+    def __init__(
+        self,
+        name: FieldName,
+        address: int,
+        verification_delay: float | None = None,
+    ):
+        super().__init__(name, address, 1, verification_delay)
 
     def parse(self, data: bytes) -> bool | None:
         num = struct.unpack("!H", data)[0]

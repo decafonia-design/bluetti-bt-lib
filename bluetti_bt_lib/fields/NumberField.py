@@ -24,9 +24,11 @@ class NumberField(UIntField):
         min: Optional[int] = None,
         max: Optional[int] = None,
         step: Optional[int] = None,
+        verification_delay: Optional[float] = None,
     ):
         super().__init__(name, address, multiplier, min, max)
         self.step = step
+        self.verification_delay = verification_delay
 
     def is_writeable(self) -> bool:
         return True

@@ -5,9 +5,10 @@ import unittest
 from bleak.exc import BleakError
 
 from bluetti_bt_lib.bluetooth import DeviceWriter, DeviceWriterConfig
+from bluetti_bt_lib.bluetooth.device_writer import _select_verification_delay
 from bluetti_bt_lib.bluetooth.encryption import BluettiEncryption
 from bluetti_bt_lib.devices.ac180 import AC180
-from bluetti_bt_lib.fields import FieldName
+from bluetti_bt_lib.fields import FieldName, NumberField, UIntField
 from bluetti_bt_lib.utils.bleak_client_mock import ClientMockNoEncryption
 
 NOTIFY_UUID = "0000ffe1-0000-1000-8000-00805f9b34fb"
@@ -128,6 +129,25 @@ class TestDeviceWriter(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(await writer.connect())
 
         self.assertEqual(notify_calls, 2)
+
+    def test_verification_delay_selection(self):
+        fast = UIntField(FieldName.DC_INPUT_POWER, 36)
+        # Default short delay, extended for Charger 2 shared controls.
+        self.assertEqual(_select_verification_delay(fast, False), 0.5)
+        self.assertEqual(_select_verification_delay(fast, True), 2.0)
+
+        # A field-declared delay wins over both defaults.
+        slow = NumberField(
+            FieldName.BATTERY_SOC_RANGE_START,
+            3015,
+            1,
+            0,
+            100,
+            5,
+            verification_delay=3.0,
+        )
+        self.assertEqual(_select_verification_delay(slow, False), 3.0)
+        self.assertEqual(_select_verification_delay(slow, True), 3.0)
 
     async def test_write_bleak_error_clears_notifier_ownership(self):
         writer = DeviceWriter(

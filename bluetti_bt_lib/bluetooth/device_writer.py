@@ -31,6 +31,19 @@ class DeviceWriterConfig:
         self.use_encryption = use_encryption
 
 
+def _select_verification_delay(field_obj, is_shared_control: bool) -> float:
+    """Pick how long to wait after a write before reading it back.
+
+    A field can declare its own delay in the device config (slow-to-apply
+    settings such as the AC300 SOC range thresholds); otherwise Charger 2
+    shared controls use the extended delay and everything else the short
+    default.
+    """
+    if field_obj is not None and field_obj.verification_delay is not None:
+        return field_obj.verification_delay
+    return 2.0 if is_shared_control else 0.5
+
+
 class DeviceWriter:
     def __init__(
         self,
@@ -377,9 +390,11 @@ class DeviceWriter:
                     if not write_succeeded:
                         return WriteVerificationResult(False, False)
 
-                    # Allow the device time to apply the write before verification.
-                    # Charger 2 shared controls need longer before reading register 15600 back.
-                    verification_delay = 2.0 if is_shared_control else 0.5
+                    # Allow the device time to apply the write before
+                    # verification (see _select_verification_delay).
+                    verification_delay = _select_verification_delay(
+                        field_obj, is_shared_control
+                    )
                     self.logger.debug(
                         "Write verification: device_class=%s field=%s "
                         "is_shared_control=%s delay=%.1fs",
