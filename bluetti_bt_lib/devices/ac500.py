@@ -23,11 +23,18 @@ class AC500(BaseDeviceV1):
                 DecimalField(FieldName.PV_S1_VOLTAGE, 86, 1),
                 DecimalField(FieldName.PV_S1_POWER, 87, 1, 10),
                 DecimalField(FieldName.PV_S1_CURRENT, 88, 2, 10),
-                SelectField(FieldName.CTRL_UPS_MODE, 3001, UpsMode),
+                SelectField(
+                    FieldName.CTRL_UPS_MODE,
+                    3001,
+                    UpsMode,
+                    verification_delay=2.0,
+                ),
                 BoolField(FieldName.CTRL_SPLIT_PHASE, 3004),
                 EnumField(FieldName.CTRL_SPLIT_PHASE_MODE, 3005, SplitPhaseMode),
                 SwitchField(FieldName.CTRL_AC, 3007),
                 SwitchField(FieldName.CTRL_DC, 3008),
+                SwitchField(FieldName.CTRL_GRID_CHARGE_ON, 3011),
+                SwitchField(FieldName.CTRL_TIME_CONTROL_ON, 3013),
                 NumberField(
                     FieldName.BATTERY_SOC_RANGE_START,
                     3015,
@@ -46,6 +53,11 @@ class AC500(BaseDeviceV1):
                     5,
                     verification_delay=2.0,
                 ),
-                SelectField(FieldName.CTRL_DISPLAY_TIMEOUT, 3061, DisplayMode),
+                SelectField(
+                    FieldName.CTRL_DISPLAY_TIMEOUT,
+                    3061,
+                    DisplayMode,
+                    verification_delay=2.0,
+                ),
             ],
         )
