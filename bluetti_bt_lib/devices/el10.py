@@ -18,6 +18,12 @@ class EL10(BaseDeviceV2):
         super().__init__(
             [
                 DecimalField(FieldName.TIME_REMAINING, 104, 0, 1 / Decimal(60)),
+                DecimalField(
+                    FieldName.DISCHARGE_TIME_REMAINING,
+                    105,
+                    0,
+                    1 / Decimal(60),
+                ),
                 UIntField(FieldName.DC_OUTPUT_POWER, 140),
                 UIntField(FieldName.AC_OUTPUT_POWER, 142),
                 UIntField(FieldName.DC_INPUT_POWER, 144),
@@ -28,14 +34,34 @@ class EL10(BaseDeviceV2):
                 SwitchField(FieldName.CTRL_AC, 2011),
                 SwitchField(FieldName.CTRL_DC, 2012),
                 SwitchField(FieldName.CTRL_ECO_DC, 2014),
-                SelectField(FieldName.CTRL_ECO_TIME_MODE_DC, 2015, EcoMode),
+                SelectField(
+                    FieldName.CTRL_ECO_TIME_MODE_DC,
+                    2015,
+                    EcoMode,
+                    verification_delay=2.0,
+                ),
                 UIntField(FieldName.CTRL_ECO_MIN_POWER_DC, 2016),
                 SwitchField(FieldName.CTRL_ECO_AC, 2017),
-                SelectField(FieldName.CTRL_ECO_TIME_MODE_AC, 2018, EcoMode),
+                SelectField(
+                    FieldName.CTRL_ECO_TIME_MODE_AC,
+                    2018,
+                    EcoMode,
+                    verification_delay=2.0,
+                ),
                 UIntField(FieldName.CTRL_ECO_MIN_POWER_AC, 2019),
-                SelectField(FieldName.CTRL_CHARGING_MODE, 2020, ChargingMode),
+                SelectField(
+                    FieldName.CTRL_CHARGING_MODE,
+                    2020,
+                    ChargingMode,
+                    verification_delay=2.0,
+                ),
                 SwitchField(FieldName.CTRL_POWER_LIFTING, 2021),
-                SelectField(FieldName.CTRL_DISPLAY_TIMEOUT, 2067, DisplayMode),
+                SelectField(
+                    FieldName.CTRL_DISPLAY_TIMEOUT,
+                    2067,
+                    DisplayMode,
+                    verification_delay=2.0,
+                ),
                 VersionField(FieldName.VER_BMS, 6175),
             ],
         )
