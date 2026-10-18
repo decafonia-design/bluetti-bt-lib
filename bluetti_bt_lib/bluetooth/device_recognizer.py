@@ -56,7 +56,7 @@ async def recognize_device(
             try:
                 registers = bluetti_device.get_device_type_registers()
 
-                _LOGGER.warning(
+                _LOGGER.debug(
                     "Recognition probe: profile=%s, encryption=%s, registers=%s",
                     type(bluetti_device).__name__,
                     device_reader.config.use_encryption,
@@ -66,7 +66,7 @@ async def recognize_device(
                 # Read the device type first.
                 data = await device_reader.read(registers)
 
-                _LOGGER.warning(
+                _LOGGER.debug(
                     "Recognition probe result: profile=%s, encryption=%s, "
                     "data=%r",
                     type(bluetti_device).__name__,

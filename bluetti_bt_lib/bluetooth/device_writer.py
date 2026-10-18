@@ -273,7 +273,12 @@ class DeviceWriter:
         else:
             command = self.bluetti_device.build_write_command(field, value)
             if command is None:
-                self.logger.error("Field is not writeable: %s", field)
+                self.logger.error(
+                    "Write rejected (field not writeable or value out of "
+                    "range): %s=%r",
+                    field,
+                    value,
+                )
                 return (
                     WriteVerificationResult(False, False)
                     if verify
