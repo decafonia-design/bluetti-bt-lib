@@ -92,7 +92,7 @@ async def recognize_device(
 
                 if DEVICE_NAME_RE.match(type_data + "12345678") is None:
                     # Some V2 Devices populate the V1 register for type, so we need to check here
-                    _LOGGER.warning(
+                    _LOGGER.debug(
                         "Invalid device type: profile=%s, encryption=%s, "
                         "type_data=%r",
                         type(bluetti_device).__name__,

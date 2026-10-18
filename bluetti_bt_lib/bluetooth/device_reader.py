@@ -411,7 +411,7 @@ class DeviceReader:
             # from a single missed notification. Recovery policy (e.g. a
             # consecutive-timeout threshold) is deliberately not applied
             # here yet.
-            self.logger.warning(
+            self.logger.debug(
                 "No notification for %s within 5s (client connected: %s)",
                 registers,
                 self.client.is_connected if self.client else False,
