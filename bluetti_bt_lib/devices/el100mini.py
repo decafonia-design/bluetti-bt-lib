@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from ..enums import EcoMode, DisplayMode, ChargingMode
+from ..enums import EcoMode, DisplayMode, ChargingMode, WorkingModeV2
 from ..fields import (
     FieldName,
     UIntField,
@@ -19,6 +19,14 @@ class EL100mini(BaseDeviceV2):
         super().__init__(
             [
                 DecimalField(FieldName.TIME_REMAINING, 104, 0, 1 / Decimal(60)),
+                # 105 is the discharge counterpart of 104: register value is
+                # minutes, reported in hours like time_remaining.
+                DecimalField(
+                    FieldName.DISCHARGE_TIME_REMAINING,
+                    105,
+                    0,
+                    1 / Decimal(60),
+                ),
                 UIntField(FieldName.DC_OUTPUT_POWER, 140),
                 UIntField(FieldName.AC_OUTPUT_POWER, 142),
                 UIntField(FieldName.DC_INPUT_POWER, 144),
@@ -26,15 +34,41 @@ class EL100mini(BaseDeviceV2):
                 DecimalField(FieldName.AC_INPUT_VOLTAGE, 1314, 1),
                 DecimalField(FieldName.AC_INPUT_CURRENT, 1315, 1),
                 DecimalField(FieldName.AC_OUTPUT_VOLTAGE, 1511, 1),
+                # UPS working mode: V2 portables keep it at 2005 and use
+                # different values than the V1 UpsMode register (3001).
+                SelectField(
+                    FieldName.CTRL_UPS_MODE,
+                    2005,
+                    WorkingModeV2,
+                    verification_delay=2.0,
+                ),
+                # UPS grid-charge enable; the AC300 exposes the same function
+                # as ctrl_grid_charge_on (register 3011 there).
+                SwitchField(FieldName.CTRL_GRID_CHARGE_ON, 2008),
                 SwitchField(FieldName.CTRL_AC, 2011),
                 SwitchField(FieldName.CTRL_DC, 2012),
                 SwitchField(FieldName.CTRL_ECO_DC, 2014),
-                SelectField(FieldName.CTRL_ECO_TIME_MODE_DC, 2015, EcoMode),
+                SelectField(
+                    FieldName.CTRL_ECO_TIME_MODE_DC,
+                    2015,
+                    EcoMode,
+                    verification_delay=2.0,
+                ),
                 UIntField(FieldName.CTRL_ECO_MIN_POWER_DC, 2016),
                 SwitchField(FieldName.CTRL_ECO_AC, 2017),
-                SelectField(FieldName.CTRL_ECO_TIME_MODE_AC, 2018, EcoMode),
+                SelectField(
+                    FieldName.CTRL_ECO_TIME_MODE_AC,
+                    2018,
+                    EcoMode,
+                    verification_delay=2.0,
+                ),
                 UIntField(FieldName.CTRL_ECO_MIN_POWER_AC, 2019),
-                SelectField(FieldName.CTRL_CHARGING_MODE, 2020, ChargingMode),
+                SelectField(
+                    FieldName.CTRL_CHARGING_MODE,
+                    2020,
+                    ChargingMode,
+                    verification_delay=2.0,
+                ),
                 SwitchField(FieldName.CTRL_POWER_LIFTING, 2021),
                 NumberField(
                     FieldName.BATTERY_SOC_RANGE_START,
@@ -54,7 +88,12 @@ class EL100mini(BaseDeviceV2):
                     5,
                     verification_delay=2.0,
                 ),
-                SelectField(FieldName.CTRL_DISPLAY_TIMEOUT, 2067, DisplayMode),
+                SelectField(
+                    FieldName.CTRL_DISPLAY_TIMEOUT,
+                    2067,
+                    DisplayMode,
+                    verification_delay=2.0,
+                ),
                 VersionField(FieldName.VER_BMS, 6175),
                 SwapStringField(FieldName.WIFI_NAME, 12002, 16),
             ],
