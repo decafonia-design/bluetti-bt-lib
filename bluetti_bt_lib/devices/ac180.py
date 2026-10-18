@@ -28,27 +28,12 @@ class AC180(BaseDeviceV2):
                 SwitchField(FieldName.CTRL_AC, 2011),
                 SwitchField(FieldName.CTRL_DC, 2012),
                 SwitchField(FieldName.CTRL_ECO_DC, 2014),
-                SelectField(
-                    FieldName.CTRL_ECO_TIME_MODE_DC,
-                    2015,
-                    EcoMode,
-                    verification_delay=2.0,
-                ),
+                SelectField(FieldName.CTRL_ECO_TIME_MODE_DC, 2015, EcoMode),
                 UIntField(FieldName.CTRL_ECO_MIN_POWER_DC, 2016),  # Not controlable
                 SwitchField(FieldName.CTRL_ECO_AC, 2017),
-                SelectField(
-                    FieldName.CTRL_ECO_TIME_MODE_AC,
-                    2018,
-                    EcoMode,
-                    verification_delay=2.0,
-                ),
+                SelectField(FieldName.CTRL_ECO_TIME_MODE_AC, 2018, EcoMode),
                 UIntField(FieldName.CTRL_ECO_MIN_POWER_AC, 2019),  # Not controlable
-                SelectField(
-                    FieldName.CTRL_CHARGING_MODE,
-                    2020,
-                    ChargingMode,
-                    verification_delay=2.0,
-                ),
+                SelectField(FieldName.CTRL_CHARGING_MODE, 2020, ChargingMode),
                 SwitchField(FieldName.CTRL_POWER_LIFTING, 2021),
                 # Display timeout (?)
                 # AC frequency (?)

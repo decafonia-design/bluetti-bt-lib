@@ -44,10 +44,10 @@ class TestSelectField(unittest.TestCase):
         self.assertFalse(field.allowed_write_type(Dummy2.VALUE_3))
 
     def test_verification_delay(self):
-        # A select can declare a longer write-verification delay; the default
-        # stays unset so the writer picks its own delay.
+        # Selects are slow to apply, so they carry the longer verification
+        # delay by default; a profile can still override it.
         field = SelectField(FieldName.AC_OUTPUT_MODE, 70, Dummy)
-        self.assertIsNone(field.verification_delay)
+        self.assertEqual(field.verification_delay, 2.0)
 
-        slow = SelectField(FieldName.AC_OUTPUT_MODE, 70, Dummy, verification_delay=2.0)
-        self.assertEqual(slow.verification_delay, 2.0)
+        fast = SelectField(FieldName.AC_OUTPUT_MODE, 70, Dummy, verification_delay=0.5)
+        self.assertEqual(fast.verification_delay, 0.5)

@@ -35,9 +35,9 @@ def _select_verification_delay(field_obj, is_shared_control: bool) -> float:
     """Pick how long to wait after a write before reading it back.
 
     A field can declare its own delay in the device config (slow-to-apply
-    settings such as the AC300 SOC range thresholds); otherwise Charger 2
-    shared controls use the extended delay and everything else the short
-    default.
+    settings such as the AC300 SOC range thresholds, and the 2s delay
+    SelectField carries by default); otherwise Charger 2 shared controls use
+    the extended delay and everything else the short default.
     """
     if field_obj is not None and field_obj.verification_delay is not None:
         return field_obj.verification_delay

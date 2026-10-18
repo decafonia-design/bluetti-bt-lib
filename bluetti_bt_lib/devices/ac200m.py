@@ -22,11 +22,6 @@ class AC200M(BaseDeviceV1):
                 SwitchField(FieldName.CTRL_AC, 3007),
                 SwitchField(FieldName.CTRL_DC, 3008),
                 SwitchField(FieldName.CTRL_POWER_OFF, 3060),
-                SelectField(
-                    FieldName.CTRL_DISPLAY_TIMEOUT,
-                    3061,
-                    DisplayMode,
-                    verification_delay=2.0,
-                ),
+                SelectField(FieldName.CTRL_DISPLAY_TIMEOUT, 3061, DisplayMode),
             ],
         )

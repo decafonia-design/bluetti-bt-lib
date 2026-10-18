@@ -23,12 +23,7 @@ class EP500(BaseDeviceV1):
                 DecimalField(FieldName.PV_S1_VOLTAGE, 86, 1),
                 DecimalField(FieldName.PV_S1_POWER, 87, 1, 10),
                 DecimalField(FieldName.PV_S1_CURRENT, 88, 2, 10),
-                SelectField(
-                    FieldName.CTRL_UPS_MODE,
-                    3001,
-                    UpsMode,
-                    verification_delay=2.0,
-                ),
+                SelectField(FieldName.CTRL_UPS_MODE, 3001, UpsMode),
                 BoolField(FieldName.CTRL_SPLIT_PHASE, 3004),
                 EnumField(FieldName.CTRL_SPLIT_PHASE_MODE, 3005, SplitPhaseMode),
                 SwitchField(FieldName.CTRL_AC, 3007),
@@ -51,11 +46,6 @@ class EP500(BaseDeviceV1):
                     5,
                     verification_delay=2.0,
                 ),
-                SelectField(
-                    FieldName.CTRL_DISPLAY_TIMEOUT,
-                    3061,
-                    DisplayMode,
-                    verification_delay=2.0,
-                ),
+                SelectField(FieldName.CTRL_DISPLAY_TIMEOUT, 3061, DisplayMode),
             ],
         )

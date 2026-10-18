@@ -14,12 +14,7 @@ class AC180P(BaseDeviceV2):
                 DecimalField(FieldName.AC_INPUT_VOLTAGE, 1314, 1),
                 SwitchField(FieldName.CTRL_AC, 2011),
                 SwitchField(FieldName.CTRL_DC, 2012),
-                SelectField(
-                    FieldName.CTRL_CHARGING_MODE,
-                    2020,
-                    ChargingMode,
-                    verification_delay=2.0,
-                ),
+                SelectField(FieldName.CTRL_CHARGING_MODE, 2020, ChargingMode),
                 SwitchField(FieldName.CTRL_POWER_LIFTING, 2021),
             ],
         )

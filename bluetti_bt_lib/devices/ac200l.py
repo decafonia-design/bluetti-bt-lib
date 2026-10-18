@@ -23,12 +23,7 @@ class AC200L(BaseDeviceV1):
                 DecimalField(FieldName.INTERNAL_DC_INPUT_VOLTAGE, 86, 1),
                 DecimalField(FieldName.INTERNAL_DC_INPUT_POWER, 87, 1, 10),
                 DecimalField(FieldName.INTERNAL_DC_INPUT_CURRENT, 88, 2),
-                SelectField(
-                    FieldName.CTRL_UPS_MODE,
-                    3001,
-                    UpsMode,
-                    verification_delay=2.0,
-                ),
+                SelectField(FieldName.CTRL_UPS_MODE, 3001, UpsMode),
                 SwitchField(FieldName.CTRL_AC, 3007),
                 SwitchField(FieldName.CTRL_DC, 3008),
                 NumberField(
@@ -50,11 +45,6 @@ class AC200L(BaseDeviceV1):
                     verification_delay=2.0,
                 ),
                 SwitchField(FieldName.CTRL_POWER_OFF, 3060),
-                SelectField(
-                    FieldName.CTRL_DISPLAY_TIMEOUT,
-                    3061,
-                    DisplayMode,
-                    verification_delay=2.0,
-                ),
+                SelectField(FieldName.CTRL_DISPLAY_TIMEOUT, 3061, DisplayMode),
             ],
         )
