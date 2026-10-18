@@ -13,8 +13,8 @@ from bluetti_bt_lib.devices.ep600 import EP600
 from bluetti_bt_lib.fields import NumberField
 
 # Device class -> the SOC range register pair that device actually uses.
-# The control mechanism (writable NumberField, 0-100 in 5% steps, slow
-# verification) is shared; the register locations stay device specific.
+# The control mechanism (writable NumberField, 0-100, slow verification)
+# is shared; the register locations stay device specific.
 SOC_RANGE_REGISTERS = {
     AC300: (3015, 3016),
     AC500: (3015, 3016),
@@ -72,12 +72,18 @@ class TestSocRangeRollout(unittest.TestCase):
                 self.assertEqual((start.address, start.value), (start_addr, 30))
                 self.assertEqual((end.address, end.value), (end_addr, 90))
 
-    def test_off_step_and_out_of_range_writes_rejected_everywhere(self):
+    def test_off_step_writes_allowed_but_out_of_range_rejected(self):
+        # step is a presentation hint; the devices accept 1% increments.
+        # Only the 0-100 bounds and the non-int/bool guards reject a write.
         for device_cls in SOC_RANGE_REGISTERS:
             with self.subTest(device=device_cls.__name__):
                 device, _, _ = self._fields(device_cls)
-                self.assertIsNone(device.build_write_command("soc_range_start", 32))
-                self.assertIsNone(device.build_write_command("soc_range_end", 91))
+                self.assertEqual(
+                    device.build_write_command("soc_range_start", 32).value, 32
+                )
+                self.assertEqual(
+                    device.build_write_command("soc_range_end", 91).value, 91
+                )
                 self.assertIsNone(device.build_write_command("soc_range_start", 150))
                 self.assertIsNone(device.build_write_command("soc_range_start", -1))
                 self.assertIsNone(device.build_write_command("soc_range_start", True))
