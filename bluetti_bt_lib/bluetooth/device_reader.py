@@ -395,7 +395,7 @@ class DeviceReader:
             # Wait for response
             res = await asyncio.wait_for(self.notify_future, timeout=5)
 
-            self.logger.debug("Got response")
+            self.logger.debug("Got response (%d bytes)", len(res))
 
             return cast(bytes, res)
         except BleakError:
@@ -405,6 +405,17 @@ class DeviceReader:
             # reconnect on the next poll; swallowing it here would
             # leave _connected stuck at True forever.
             raise
+        except asyncio.TimeoutError:
+            # The GATT link can still look healthy when the device skips
+            # a response: log enough context to tell a dead connection
+            # from a single missed notification. Recovery policy (e.g. a
+            # consecutive-timeout threshold) is deliberately not applied
+            # here yet.
+            self.logger.warning(
+                "No notification for %s within 5s (client connected: %s)",
+                registers,
+                self.client.is_connected if self.client else False,
+            )
         except Exception:
             self.logger.warning("Error while reading data", exc_info=True)
 
@@ -513,6 +524,10 @@ class DeviceReader:
         # a pending command (leftovers, write acknowledgements, ...). Only the
         # future of the running command may be resolved here.
         if self.notify_future is None or self.notify_future.done():
+            self.logger.debug(
+                "Notification (%d bytes) arrived with no pending command",
+                len(data),
+            )
             return
 
         self.notify_future.set_result(self.notify_response)
