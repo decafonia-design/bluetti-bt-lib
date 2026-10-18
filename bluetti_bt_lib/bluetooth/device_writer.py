@@ -31,6 +31,19 @@ class DeviceWriterConfig:
         self.use_encryption = use_encryption
 
 
+def _select_verification_delay(field_obj, is_shared_control: bool) -> float:
+    """Pick how long to wait after a write before reading it back.
+
+    A field can declare its own delay in the device config (slow-to-apply
+    settings such as the AC300 SOC range thresholds); otherwise Charger 2
+    shared controls use the extended delay and everything else the short
+    default.
+    """
+    if field_obj is not None and field_obj.verification_delay is not None:
+        return field_obj.verification_delay
+    return 2.0 if is_shared_control else 0.5
+
+
 class DeviceWriter:
     def __init__(
         self,
@@ -52,6 +65,8 @@ class DeviceWriter:
         self._connected = False
         self._owns_notifier = False
         self._borrowed_encryption = False
+        self._attached = False
+        """True when the client belongs to a DeviceReader's shared connection."""
         self._write_future: asyncio.Future[bytes] | None = None
 
         self.logger = logging.getLogger(
@@ -66,8 +81,13 @@ class DeviceWriter:
         handshake) belongs to the reader, so the writer must not start a
         second one on the same characteristic and cannot wait for write
         acknowledgements it never receives.
+
+        The client itself belongs to the reader as well: disconnect() on
+        an attached writer leaves the shared connection alone for the
+        reader to tear down.
         """
         self._connected = True
+        self._attached = True
         if encryption is not None:
             # Share the session instead of copying keys, so both sides stay
             # in sync for the lifetime of the connection. It is not ours to
@@ -90,7 +110,18 @@ class DeviceWriter:
                 self.logger.debug("Connecting to device")
                 await self.client.connect()
 
-            if self.config.use_encryption and not self._owns_notifier:
+            if (
+                self.config.use_encryption
+                and not self._attached
+                and not self._owns_notifier
+            ):
+                # An attached writer never owns a notifier: the reader
+                # owns the subscription and the handshake on the shared
+                # connection. A standalone writer must (re-)subscribe on
+                # every new connection: reconnecting reopens the GATT
+                # connection on the same client object, so the previous
+                # subscription and handshake are gone even though the
+                # Python object identity has not changed.
                 self.encryption_ready.clear()
                 await self.client.start_notify(
                     NOTIFY_UUID, self._notification_handler
@@ -108,10 +139,46 @@ class DeviceWriter:
 
         except BleakError as err:
             self.logger.warning("Bleak error during connect: %s", err)
+            await self._mark_disconnected()
             return False
+        except asyncio.CancelledError:
+            # Propagate cancellation (HA reload/unload) after tearing
+            # down whatever this connect attempt started.
+            await self._mark_disconnected()
+            raise
         except BaseException as err:
             self.logger.warning("Unknown error during connect: %s", err)
+            await self._mark_disconnected()
             return False
+
+    async def _mark_disconnected(self) -> None:
+        """Forget a dropped or half-established connection.
+
+        Reconnecting reopens the GATT connection on the same client
+        object, so the notify subscription and the encryption handshake
+        are gone with it even though the Python object identity has not
+        changed. A standalone writer must therefore re-subscribe and
+        re-run the handshake on the next connect(), so its notifier
+        ownership state and session are cleared here. An attached
+        writer leaves the reader's notifier, session and client alone.
+        """
+        self._connected = False
+
+        if self._attached:
+            return
+
+        self.has_notifier = False
+        self._owns_notifier = False
+        if not self._borrowed_encryption:
+            self.encryption.reset()
+        self.encrypted_buffer.clear()
+        self.encryption_ready.clear()
+
+        if self.client and self.client.is_connected:
+            try:
+                await self.client.disconnect()
+            except Exception:
+                pass
 
     async def disconnect(self):
         """Disconnect from the device."""
@@ -126,7 +193,15 @@ class DeviceWriter:
                     pass
                 self.has_notifier = False
 
-            if self.client and self.client.is_connected:
+            # Only disconnect clients that this writer established.
+            # When attached, the client belongs to the reader: pulling
+            # it down here would kill the reader's connection while the
+            # reader still believes it is connected.
+            if (
+                not self._attached
+                and self.client
+                and self.client.is_connected
+            ):
                 await self.client.disconnect()
                 self.logger.debug("Disconnected from device")
 
@@ -135,6 +210,7 @@ class DeviceWriter:
             self.encrypted_buffer.clear()
             self.encryption_ready.clear()
             self._connected = False
+            self._attached = False
 
 
     async def write(self, field: str, value: Any) -> bool:
@@ -197,7 +273,12 @@ class DeviceWriter:
         else:
             command = self.bluetti_device.build_write_command(field, value)
             if command is None:
-                self.logger.error("Field is not writeable: %s", field)
+                self.logger.error(
+                    "Write rejected (field not writeable or value out of "
+                    "range): %s=%r",
+                    field,
+                    value,
+                )
                 return (
                     WriteVerificationResult(False, False)
                     if verify
@@ -314,12 +395,24 @@ class DeviceWriter:
                     if not write_succeeded:
                         return WriteVerificationResult(False, False)
 
-                    # Allow the device time to apply the write before verification.
-                    # Charger 2 shared controls need longer before reading register 15600 back.
-                    verification_delay = 1.5 if is_shared_control else 0.5
+                    # Allow the device time to apply the write before
+                    # verification (see _select_verification_delay).
+                    verification_delay = _select_verification_delay(
+                        field_obj, is_shared_control
+                    )
+                    self.logger.debug(
+                        "Write verification: device_class=%s field=%s "
+                        "is_shared_control=%s delay=%.1fs",
+                        type(self.bluetti_device).__name__,
+                        field,
+                        is_shared_control,
+                        verification_delay,
+                    )
                     await asyncio.sleep(verification_delay)
-
-                    # Read back only the register(s) containing the requested field.
+                    self.logger.debug(
+                        "Write verification delay elapsed for %s; reading back",
+                        field,
+                    )
 
                     # Read back only the register(s) containing the requested field.
                     if is_shared_control:
@@ -375,6 +468,14 @@ class DeviceWriter:
                     actual_value = values.get(field)
                     verified = actual_value == value
 
+                    self.logger.debug(
+                        "Write verification result for %s: requested %r, "
+                        "device reports %r",
+                        field,
+                        value,
+                        actual_value,
+                    )
+
                     if not verified:
                         self.logger.warning(
                             "Write read-back mismatch for %s: requested %r, "
@@ -400,7 +501,10 @@ class DeviceWriter:
                 )
             except BleakError as err:
                 self.logger.warning("Bleak error: %s", err)
-                self._connected = False
+                # Drop all per-connection state (standalone writer) so
+                # the next write() reconnects, re-subscribes the
+                # notifier and re-runs the encryption handshake.
+                await self._mark_disconnected()
                 return (
                     WriteVerificationResult(write_succeeded, False)
                     if verify

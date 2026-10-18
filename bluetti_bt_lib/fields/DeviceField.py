@@ -4,10 +4,19 @@ from ..fields import FieldName
 
 
 class DeviceField:
-    def __init__(self, name: FieldName, address: int, size: int):
+    def __init__(
+        self,
+        name: FieldName,
+        address: int,
+        size: int,
+        verification_delay: float | None = None,
+    ):
         self.name = name.value
         self.address = address
         self.size = size
+        # Optional per-field override of the delay DeviceWriter waits
+        # before reading a write back, for slow-to-apply settings.
+        self.verification_delay = verification_delay
 
     def parse(self, data: bytes) -> Any:
         raise NotImplementedError

@@ -56,7 +56,7 @@ async def recognize_device(
             try:
                 registers = bluetti_device.get_device_type_registers()
 
-                _LOGGER.warning(
+                _LOGGER.debug(
                     "Recognition probe: profile=%s, encryption=%s, registers=%s",
                     type(bluetti_device).__name__,
                     device_reader.config.use_encryption,
@@ -66,7 +66,7 @@ async def recognize_device(
                 # Read the device type first.
                 data = await device_reader.read(registers)
 
-                _LOGGER.warning(
+                _LOGGER.debug(
                     "Recognition probe result: profile=%s, encryption=%s, "
                     "data=%r",
                     type(bluetti_device).__name__,
@@ -92,7 +92,7 @@ async def recognize_device(
 
                 if DEVICE_NAME_RE.match(type_data + "12345678") is None:
                     # Some V2 Devices populate the V1 register for type, so we need to check here
-                    _LOGGER.warning(
+                    _LOGGER.debug(
                         "Invalid device type: profile=%s, encryption=%s, "
                         "type_data=%r",
                         type(bluetti_device).__name__,

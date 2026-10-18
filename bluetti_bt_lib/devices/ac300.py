@@ -4,9 +4,9 @@ from ..fields import (
     EnumField,
     DecimalField,
     UIntField,
+    NumberField,
     SelectField,
     BoolField,
-    DecimalArrayField,
     SwitchField,
     VersionField,
 )
@@ -19,7 +19,7 @@ class AC300(BaseDeviceV1):
             [
                 VersionField(FieldName.VER_ARM, 23),
                 VersionField(FieldName.VER_DSP, 25),
-                DecimalField(FieldName.POWER_GENERATION, 43, 1),
+                DecimalField(FieldName.POWER_GENERATION, 41, 1),
                 EnumField(FieldName.AC_OUTPUT_MODE, 70, OutputMode),
                 DecimalField(FieldName.INTERNAL_AC_VOLTAGE, 71, 1),
                 DecimalField(FieldName.INTERNAL_AC_FREQUENCY, 74, 2),
@@ -33,16 +33,35 @@ class AC300(BaseDeviceV1):
                 EnumField(FieldName.CTRL_SPLIT_PHASE_MODE, 3005, SplitPhaseMode),
                 SwitchField(FieldName.CTRL_AC, 3007),
                 SwitchField(FieldName.CTRL_DC, 3008),
-                UIntField(FieldName.BATTERY_SOC_RANGE_START, 3015),
-                UIntField(FieldName.BATTERY_SOC_RANGE_END, 3016),
+                SwitchField(FieldName.CTRL_GRID_CHARGE_ON, 3011),
+                SwitchField(FieldName.CTRL_TIME_CONTROL_ON, 3013),
+                NumberField(
+                    FieldName.BATTERY_SOC_RANGE_START,
+                    3015,
+                    1,
+                    0,
+                    100,
+                    5,
+                    verification_delay=2.0,
+                ),
+                NumberField(
+                    FieldName.BATTERY_SOC_RANGE_END,
+                    3016,
+                    1,
+                    0,
+                    100,
+                    5,
+                    verification_delay=2.0,
+                ),
                 # SelectField(FieldName.CTRL_DISPLAY_TIMEOUT, 3061, DisplayMode),
             ],
             [
-                UIntField(FieldName.PACK_SELECTED, 96),
-                DecimalField(FieldName.PACK_VOLTAGE, 98, 2),
+                # Only the per-pack SOC is useful. The pack selector write is
+                # register 3006 (BaseDeviceV1.get_pack_selector), independent of
+                # these read fields, so the read-only PACK_SELECTED, pack voltage
+                # and 16 per-pack cell voltages are dropped to avoid a pile of
+                # near-useless per-pack entities.
                 UIntField(FieldName.PACK_BATTERY_SOC, 99),
-                DecimalArrayField(FieldName.PACK_CELL_VOLTAGES, 105, 16, 2),
-                # VersionField(FieldName.VER_BMS, 201),
             ],
             max_packs=4,
         )

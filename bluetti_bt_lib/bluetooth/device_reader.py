@@ -46,6 +46,9 @@ class DeviceReader:
         self.client = None
 
         self.has_notifier = False
+        self._notified_client = None
+        """Client whose notify subscription is confirmed live. Only set
+        after start_notify() succeeds, so a failed setup is retried."""
         self.current_registers = None
         self.notify_response = bytearray()
         self.notify_future: asyncio.Future[Any] | None = None
@@ -86,11 +89,19 @@ class DeviceReader:
                     max_attempts=10,
                 )
 
-            if not self.has_notifier:
+            # _notified_client tracks the client whose subscription is
+            # confirmed live. has_notifier records that a subscription
+            # exists (or may exist) on the current client so disconnect()
+            # can stop it even when start_notify() raised after already
+            # registering the callback. Because _notified_client is only
+            # set on success, a failed setup is retried by the next
+            # connect() instead of being skipped as already subscribed.
+            if self.client is not self._notified_client:
                 self.has_notifier = True
                 await self.client.start_notify(
                     NOTIFY_UUID, self._notification_handler
                 )
+                self._notified_client = self.client
 
             self.logger.debug("Connected to device")
 
@@ -104,10 +115,74 @@ class DeviceReader:
 
         except BleakError as err:
             self.logger.warning("Bleak error during connect: %s", err)
+            await self._cleanup_failed_connect()
             return False
+        except asyncio.CancelledError:
+            # Home Assistant cancels tasks on reload/unload. Tear down
+            # whatever we started, then let the cancellation propagate
+            # instead of reporting it as an ordinary connection failure.
+            await self._cleanup_failed_connect()
+            raise
         except BaseException as err:
             self.logger.warning("Unknown error during connect: %s", err)
+            await self._cleanup_failed_connect()
             return False
+
+    async def _mark_disconnected(self) -> None:
+        """Forget a connection that the device or the stack dropped.
+
+        The notify subscription and the encryption session are only valid
+        for the lifetime of a single connection, so they are cleared here
+        as well. Without this, the next connect() would see the stale
+        has_notifier flag, skip start_notify() on the replacement client
+        and then never receive a response again. The stale client is
+        disconnected too (when we own it) so a fresh connect cannot
+        stack a second connection on top of a half-dead one.
+        """
+        self._connected = False
+        self.has_notifier = False
+        self._notified_client = None
+        self.encryption.reset()
+        self.encrypted_buffer.clear()
+
+        if self.ble_client is None and self.client and self.client.is_connected:
+            try:
+                await self.client.disconnect()
+            except Exception:
+                pass
+
+    async def _cleanup_failed_connect(self) -> None:
+        """Tear down a half-established connection.
+
+        If connect() fails after the client was created (for example the
+        encryption handshake never completed), leaving that client
+        connected would leak it: the next connect() would open a second
+        connection to the device instead of starting from a clean state.
+
+        A caller-supplied ble_client is not ours to tear down; the
+        caller cleans it up through disconnect().
+        """
+        if self.ble_client is not None:
+            return
+
+        self._connected = False
+
+        if self.has_notifier and self.client:
+            try:
+                await self.client.stop_notify(NOTIFY_UUID)
+            except Exception:
+                pass
+            self.has_notifier = False
+            self._notified_client = None
+
+        if self.client and self.client.is_connected:
+            try:
+                await self.client.disconnect()
+            except Exception:
+                pass
+
+        self.encryption.reset()
+        self.encrypted_buffer.clear()
 
     async def disconnect(self):
         """Clean up the reader's notification and connection state."""
@@ -119,6 +194,7 @@ class DeviceReader:
                 except Exception:
                     pass
                 self.has_notifier = False
+                self._notified_client = None
 
             # Only disconnect clients created and managed by this reader.
             # A supplied ble_client belongs to the caller.
@@ -222,9 +298,19 @@ class DeviceReader:
                 return None
             except BleakError as err:
                 self.logger.warning("Bleak error: %s", err)
-                # Connection may be lost, mark as disconnected
-                self._connected = False
+                # Connection may be lost: drop all per-connection state so
+                # the next read() reconnects with a fresh client, notifier
+                # and encryption handshake.
+                await self._mark_disconnected()
                 return None
+            except asyncio.CancelledError:
+                # External cancellation (e.g. HA reload/unload); the
+                # connection state is now uncertain, so drop it and let
+                # the cancellation propagate. The timeout above is
+                # converted to TimeoutError by async_timeout before it
+                # can reach this handler.
+                await self._mark_disconnected()
+                raise
             except BaseException as err:
                 self.logger.warning("Unknown error %s", err)
                 return None
@@ -270,8 +356,13 @@ class DeviceReader:
             return None
         except BleakError as err:
             self.logger.warning("Bleak error reading selected registers: %s", err)
-            self._connected = False
+            # Same recovery path as read(): the next read/read_locked()
+            # reconnects from scratch.
+            await self._mark_disconnected()
             return None
+        except asyncio.CancelledError:
+            await self._mark_disconnected()
+            raise
         except BaseException as err:
             self.logger.warning("Error reading selected registers: %s", err)
             return None
@@ -304,9 +395,27 @@ class DeviceReader:
             # Wait for response
             res = await asyncio.wait_for(self.notify_future, timeout=5)
 
-            self.logger.debug("Got response")
+            self.logger.debug("Got response (%d bytes)", len(res))
 
             return cast(bytes, res)
+        except BleakError:
+            # A failed GATT write/notify almost always means the
+            # connection is gone. Propagate it so the caller's
+            # BleakError handler can drop the dead connection and
+            # reconnect on the next poll; swallowing it here would
+            # leave _connected stuck at True forever.
+            raise
+        except asyncio.TimeoutError:
+            # The GATT link can still look healthy when the device skips
+            # a response: log enough context to tell a dead connection
+            # from a single missed notification. Recovery policy (e.g. a
+            # consecutive-timeout threshold) is deliberately not applied
+            # here yet.
+            self.logger.debug(
+                "No notification for %s within 5s (client connected: %s)",
+                registers,
+                self.client.is_connected if self.client else False,
+            )
         except Exception:
             self.logger.warning("Error while reading data", exc_info=True)
 
@@ -415,6 +524,10 @@ class DeviceReader:
         # a pending command (leftovers, write acknowledgements, ...). Only the
         # future of the running command may be resolved here.
         if self.notify_future is None or self.notify_future.done():
+            self.logger.debug(
+                "Notification (%d bytes) arrived with no pending command",
+                len(data),
+            )
             return
 
         self.notify_future.set_result(self.notify_response)
