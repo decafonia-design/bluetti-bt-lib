@@ -18,12 +18,6 @@ class EL10(BaseDeviceV2):
         super().__init__(
             [
                 DecimalField(FieldName.TIME_REMAINING, 104, 0, 1 / Decimal(60)),
-                DecimalField(
-                    FieldName.DISCHARGE_TIME_REMAINING,
-                    105,
-                    0,
-                    1 / Decimal(60),
-                ),
                 UIntField(FieldName.DC_OUTPUT_POWER, 140),
                 UIntField(FieldName.AC_OUTPUT_POWER, 142),
                 UIntField(FieldName.DC_INPUT_POWER, 144),

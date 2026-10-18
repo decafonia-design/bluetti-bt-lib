@@ -20,18 +20,15 @@ class TestEL10(unittest.TestCase):
     def _field(self, name):
         return next(f for f in self.device.fields if f.name == name)
 
-    def test_discharge_time_remaining_reads_hours(self):
-        # Register 105 counts minutes; report it in hours like the charge
-        # counterpart at 104 (time_remaining).
-        field = self._field("discharge_time_remaining")
+    def test_time_remaining_reads_hours(self):
+        field = self._field("time_remaining")
         self.assertIsInstance(field, DecimalField)
-        self.assertEqual(field.address, 105)
+        self.assertEqual(field.address, 104)
         self.assertEqual(field.parse(b"\x00\x5a"), Decimal("1.5"))
 
-    def test_time_remaining_keeps_its_hours_scale(self):
-        self.assertEqual(
-            self._field("time_remaining").parse(b"\x00\x5a"), Decimal("1.5")
-        )
+    def test_register_105_is_not_exposed(self):
+        # 105 mirrors the charge time at 104, so it is not a separate sensor.
+        self.assertFalse(any(f.address == 105 for f in self.device.fields))
 
     def test_slow_selects_declare_verification_delay(self):
         for name in SLOW_SELECTS:

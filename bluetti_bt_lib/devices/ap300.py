@@ -19,14 +19,6 @@ class AP300(BaseDeviceV2):
         super().__init__(
             [
                 DecimalField(FieldName.TIME_REMAINING, 104, 0, 1 / Decimal(60)),
-                # 105 is the discharge counterpart of 104: register value is
-                # minutes, reported in hours like time_remaining.
-                DecimalField(
-                    FieldName.DISCHARGE_TIME_REMAINING,
-                    105,
-                    0,
-                    1 / Decimal(60),
-                ),
                 UIntField(FieldName.DC_OUTPUT_POWER, 140),
                 UIntField(FieldName.AC_OUTPUT_POWER, 142),
                 UIntField(FieldName.DC_INPUT_POWER, 144),

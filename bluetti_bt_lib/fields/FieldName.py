@@ -65,7 +65,6 @@ class FieldName(Enum):
     DC_OUTPUT_POWER = "dc_output_power"
     DEVICE_TYPE = "device_type"
     DEVICE_SN = "device_sn"
-    DISCHARGE_TIME_REMAINING = "discharge_time_remaining"
     GRID_FREQUENCY = "grid_frequency"
     GRID_FREQ_MAX_VALUE = "grid_frequency_max_value"
     GRID_FREQ_MIN_VALUE = "grid_frequency_min_value"

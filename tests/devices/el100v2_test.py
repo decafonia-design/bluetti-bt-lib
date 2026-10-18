@@ -1,9 +1,8 @@
 import unittest
-from decimal import Decimal
 
 from bluetti_bt_lib.devices.el100v2 import EL100V2
 from bluetti_bt_lib.enums import WorkingModeV2
-from bluetti_bt_lib.fields import DecimalField, SelectField, SwitchField
+from bluetti_bt_lib.fields import SelectField, SwitchField
 
 # Selects the device is slow to reflect back after a write.
 SLOW_SELECTS = (
@@ -54,13 +53,9 @@ class TestEL100V2(unittest.TestCase):
         command = self.device.build_write_command("ctrl_grid_charge_on", True)
         self.assertEqual((command.address, command.value), (2008, 1))
 
-    def test_discharge_time_remaining_reads_hours(self):
-        # Register 105 counts minutes; report it in hours like the charge
-        # counterpart at 104 (time_remaining).
-        field = self._field("discharge_time_remaining")
-        self.assertIsInstance(field, DecimalField)
-        self.assertEqual(field.address, 105)
-        self.assertEqual(field.parse(b"\x00\x5a"), Decimal("1.5"))
+    def test_register_105_is_not_exposed(self):
+        # 105 mirrors the charge time at 104, so it is not a separate sensor.
+        self.assertFalse(any(f.address == 105 for f in self.device.fields))
 
     def test_slow_selects_declare_verification_delay(self):
         for name in SLOW_SELECTS:
