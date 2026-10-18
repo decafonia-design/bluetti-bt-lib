@@ -1,5 +1,5 @@
 from ..base_devices import BaseDeviceV2
-from ..fields import FieldName, UIntField, DecimalField
+from ..fields import FieldName, UIntField, DecimalField, SwitchField
 
 
 class Handsfree1(BaseDeviceV2):
@@ -18,5 +18,7 @@ class Handsfree1(BaseDeviceV2):
                 DecimalField(FieldName.AC_INPUT_CURRENT, 1315, 1),
                 DecimalField(FieldName.AC_OUTPUT_FREQUENCY, 1500, 1),
                 DecimalField(FieldName.AC_OUTPUT_VOLTAGE, 1511, 1),
+                SwitchField(FieldName.CTRL_AC, 2011),
+                SwitchField(FieldName.CTRL_DC, 2012),
             ],
         )

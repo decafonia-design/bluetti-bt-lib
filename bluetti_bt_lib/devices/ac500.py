@@ -28,6 +28,8 @@ class AC500(BaseDeviceV1):
                 EnumField(FieldName.CTRL_SPLIT_PHASE_MODE, 3005, SplitPhaseMode),
                 SwitchField(FieldName.CTRL_AC, 3007),
                 SwitchField(FieldName.CTRL_DC, 3008),
+                SwitchField(FieldName.CTRL_GRID_CHARGE_ON, 3011),
+                SwitchField(FieldName.CTRL_TIME_CONTROL_ON, 3013),
                 NumberField(
                     FieldName.BATTERY_SOC_RANGE_START,
                     3015,

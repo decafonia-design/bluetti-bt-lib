@@ -133,7 +133,7 @@ class TestDeviceWriter(unittest.IsolatedAsyncioTestCase):
     def test_verification_delay_selection(self):
         fast = UIntField(FieldName.DC_INPUT_POWER, 36)
         # Default short delay, extended for Charger 2 shared controls.
-        self.assertEqual(_select_verification_delay(fast, False), 0.5)
+        self.assertEqual(_select_verification_delay(fast, False), 0.7)
         self.assertEqual(_select_verification_delay(fast, True), 2.0)
 
         # A field-declared delay wins over both defaults.

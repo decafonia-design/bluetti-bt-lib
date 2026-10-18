@@ -6,6 +6,7 @@ from bluetti_bt_lib.devices.ac500 import AC500
 from bluetti_bt_lib.devices.ap300 import AP300
 from bluetti_bt_lib.devices.el100mini import EL100mini
 from bluetti_bt_lib.devices.el100v2 import EL100V2
+from bluetti_bt_lib.devices.el200v2 import EL200V2
 from bluetti_bt_lib.devices.ep2000 import EP2000
 from bluetti_bt_lib.devices.ep500 import EP500
 from bluetti_bt_lib.devices.ep500p import EP500P
@@ -23,6 +24,7 @@ SOC_RANGE_REGISTERS = {
     EP500P: (3015, 3016),
     AP300: (2022, 2023),
     EL100V2: (2022, 2023),
+    EL200V2: (2022, 2023),
     EL100mini: (2022, 2023),
     EP600: (2022, 2023),
     EP2000: (2022, 2023),

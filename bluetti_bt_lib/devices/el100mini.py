@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from ..enums import EcoMode, DisplayMode, ChargingMode
+from ..enums import EcoMode, DisplayMode, ChargingMode, WorkingModeV2
 from ..fields import (
     FieldName,
     UIntField,
@@ -26,6 +26,12 @@ class EL100mini(BaseDeviceV2):
                 DecimalField(FieldName.AC_INPUT_VOLTAGE, 1314, 1),
                 DecimalField(FieldName.AC_INPUT_CURRENT, 1315, 1),
                 DecimalField(FieldName.AC_OUTPUT_VOLTAGE, 1511, 1),
+                # UPS working mode: V2 portables keep it at 2005 and use
+                # different values than the V1 UpsMode register (3001).
+                SelectField(FieldName.CTRL_UPS_MODE, 2005, WorkingModeV2),
+                # UPS grid-charge enable; the AC300 exposes the same function
+                # as ctrl_grid_charge_on (register 3011 there).
+                SwitchField(FieldName.CTRL_GRID_CHARGE_ON, 2008),
                 SwitchField(FieldName.CTRL_AC, 2011),
                 SwitchField(FieldName.CTRL_DC, 2012),
                 SwitchField(FieldName.CTRL_ECO_DC, 2014),
