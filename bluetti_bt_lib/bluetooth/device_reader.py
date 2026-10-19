@@ -301,10 +301,10 @@ class DeviceReader:
                         installed = None
 
                     slot_limit = self.bluetti_device.max_packs if pack_registers else 0
-                    found_packs = 0
+                    slots: list[int] = []
 
                     for pack in range(1, slot_limit + 1):
-                        if installed is not None and found_packs >= installed:
+                        if installed is not None and len(slots) >= installed:
                             break
 
                         body = register.parse_response(
@@ -341,18 +341,25 @@ class DeviceReader:
 
                         if raw or self._pack_has_data(pack_data):
                             parsed_data.update(pack_data)
-                            found_packs += 1
+                            slots.append(pack)
                         else:
                             self.logger.debug(
                                 "Pack slot %s answered with nothing, treating it as empty",
                                 pack,
                             )
 
-                    if installed is not None and found_packs != installed:
+                    # Tell the consumer which slots hold a pack. Key presence on
+                    # its own cannot say whether a slot is empty or a pack that
+                    # just failed to answer, and a consumer that hides entities
+                    # needs that difference to stay stable.
+                    if pack_registers and not raw:
+                        parsed_data[FieldName.PACK_SLOTS.value] = slots
+
+                    if installed is not None and len(slots) != installed:
                         self.logger.debug(
                             "Station reported %s packs, %s answered in slots 1-%s",
                             installed,
-                            found_packs,
+                            len(slots),
                             slot_limit,
                         )
 
