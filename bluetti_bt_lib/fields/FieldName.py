@@ -121,3 +121,6 @@ class FieldName(Enum):
     PACK_VER_SAFETY_MOD = "version_safety_module"
     PACK_VER_HV_MOD = "version_hv_module"
     PACK_VOLTAGE = "voltage"
+
+    # Not a register: the reader reports the slots it found packs in
+    PACK_SLOTS = "pack_slots"

@@ -7,7 +7,7 @@ from unittest.mock import patch
 from bluetti_bt_lib import DeviceReader
 from bluetti_bt_lib.base_devices import BaseDeviceV1
 from bluetti_bt_lib.bluetooth import device_reader
-from bluetti_bt_lib.devices import AC200M, AC300, AC500
+from bluetti_bt_lib.devices import AC200M, AC300, AC500, AC60
 from bluetti_bt_lib.utils.bleak_client_mock import ClientMockNoEncryption
 
 # The V1 tower stations all report their installed pack count at register 96
@@ -43,7 +43,7 @@ class SlotAwareMock(ClientMockNoEncryption):
         return super()._get_register(starting_address, size)
 
 
-async def _read(device, ble_mock):
+async def _read(device, ble_mock, raw: bool = False):
     reader = DeviceReader(
         "00:11:00:11:00:11",
         device,
@@ -52,7 +52,7 @@ async def _read(device, ble_mock):
     )
     # The reader waits for the station to switch packs; no need to wait in tests.
     with patch.object(device_reader, "PACK_SELECTOR_SETTLE_SECONDS", 0):
-        return await reader.read()
+        return await reader.read(raw=raw)
 
 
 class TestPackLayout(unittest.TestCase):
@@ -87,6 +87,7 @@ class TestPackSlots(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(data.get("pack_num"), 3)
+        self.assertEqual(data.get("pack_slots"), [2, 3, 4])
         self.assertNotIn("pack_1_voltage", data)
         self.assertNotIn("pack_1_battery_soc", data)
         self.assertEqual(data.get("pack_2_voltage"), Decimal("51.2"))
@@ -101,6 +102,7 @@ class TestPackSlots(unittest.IsolatedAsyncioTestCase):
 
         # The gaps have to be walked, so the walk reaches slot 4 and stops.
         self.assertEqual(ble_mock.selected, [1, 2, 3, 4])
+        self.assertEqual(data.get("pack_slots"), [2, 4])
         self.assertEqual(data.get("pack_2_voltage"), Decimal("51.2"))
         self.assertEqual(data.get("pack_4_voltage"), Decimal("51.0"))
         for slot in (1, 3, 5, 6):
@@ -113,6 +115,7 @@ class TestPackSlots(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(ble_mock.selected, [1, 2])
+        self.assertEqual(data.get("pack_slots"), [1, 2])
         self.assertEqual(data.get("pack_2_voltage"), Decimal("51.1"))
         self.assertNotIn("pack_3_voltage", data)
         self.assertNotIn("pack_6_battery_soc", data)
@@ -122,6 +125,7 @@ class TestPackSlots(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(ble_mock.selected, [])
         self.assertEqual(data.get("pack_num"), 0)
+        self.assertEqual(data.get("pack_slots"), [])
         self.assertNotIn("pack_1_voltage", data)
 
     async def test_missing_pack_num_walks_every_slot(self):
@@ -134,8 +138,26 @@ class TestPackSlots(unittest.IsolatedAsyncioTestCase):
         data = await _read(device, ble_mock)
 
         self.assertEqual(ble_mock.selected, [1, 2, 3, 4, 5, 6])
+        self.assertEqual(data.get("pack_slots"), [5])
         self.assertEqual(data.get("pack_5_voltage"), Decimal("51.0"))
         self.assertNotIn("pack_6_voltage", data)
+
+    async def test_raw_scans_report_every_slot(self):
+        # Raw is for register scanning, so it keeps the empty slots and leaves
+        # out the synthesized slot list.
+        ble_mock = SlotAwareMock({2: (5120, 80)})
+        ble_mock.add_r_int(96, 1)
+
+        data = await _read(AC300(), ble_mock, raw=True)
+
+        self.assertEqual(ble_mock.selected, [1, 2, 3, 4])
+        self.assertNotIn("pack_slots", data)
+
+    async def test_stations_without_packs_have_no_slot_list(self):
+        data = await _read(AC60(), ClientMockNoEncryption())
+
+        self.assertIsNotNone(data)
+        self.assertNotIn("pack_slots", data)
 
 
 class TestPackPolling(unittest.IsolatedAsyncioTestCase):
@@ -152,6 +174,7 @@ class TestPackPolling(unittest.IsolatedAsyncioTestCase):
 
         self.assertIsNotNone(data)
         self.assertEqual(data.get("pack_num"), 2)
+        self.assertEqual(data.get("pack_slots"), [1, 2])
         self.assertEqual(data.get("pack_1_battery_soc"), 77)
         self.assertEqual(data.get("pack_2_battery_soc"), 77)
         # Register 98 is centivolts, so 5120 reads as 51.2 V per pack.
