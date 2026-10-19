@@ -59,11 +59,12 @@ class AC300(BaseDeviceV1):
                 # SelectField(FieldName.CTRL_DISPLAY_TIMEOUT, 3061, DisplayMode),
             ],
             [
-                # Only the per-pack SOC is useful. The pack selector write is
-                # register 3006 (BaseDeviceV1.get_pack_selector), independent of
-                # these read fields, so the read-only PACK_SELECTED, pack voltage
-                # and 16 per-pack cell voltages are dropped to avoid a pile of
-                # near-useless per-pack entities.
+                # Per-pack readings, each selected by the write to 3006
+                # (BaseDeviceV1.get_pack_selector). The read-only PACK_SELECTED
+                # and the 16 per-pack cell voltages stay off the profile: the
+                # selector write is independent of these fields, and sixteen
+                # entities per pack is more noise than it is worth.
+                DecimalField(FieldName.PACK_VOLTAGE, 98, 2),
                 UIntField(FieldName.PACK_BATTERY_SOC, 99),
             ],
             # Ceiling, not the polled count: the reader stops at the pack count

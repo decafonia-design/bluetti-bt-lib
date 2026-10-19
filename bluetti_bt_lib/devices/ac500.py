@@ -8,6 +8,7 @@ from ..fields import (
     BoolField,
     SwitchField,
     UIntField,
+    VersionField,
 )
 from ..enums import OutputMode, DisplayMode, UpsMode, SplitPhaseMode
 
@@ -16,9 +17,14 @@ class AC500(BaseDeviceV1):
     def __init__(self):
         super().__init__(
             [
+                VersionField(FieldName.VER_ARM, 23),
+                VersionField(FieldName.VER_DSP, 25),
+                DecimalField(FieldName.POWER_GENERATION, 41, 1),
                 EnumField(FieldName.AC_OUTPUT_MODE, 70, OutputMode),
-                DecimalField(FieldName.INTERNAL_AC_VOLTAGE, 71, 1, 10),
-                DecimalField(FieldName.INTERNAL_AC_FREQUENCY, 74, 2, 10),
+                # Same scaling as the AC300: the tower reports millivolts and
+                # centihertz, so no multiplier.
+                DecimalField(FieldName.INTERNAL_AC_VOLTAGE, 71, 1),
+                DecimalField(FieldName.INTERNAL_AC_FREQUENCY, 74, 2),
                 DecimalField(FieldName.AC_INPUT_VOLTAGE, 77, 1),
                 DecimalField(FieldName.AC_INPUT_FREQUENCY, 80, 2),
                 DecimalField(FieldName.PV_S1_VOLTAGE, 86, 1),
@@ -55,8 +61,9 @@ class AC500(BaseDeviceV1):
                 SelectField(FieldName.CTRL_DISPLAY_TIMEOUT, 3061, DisplayMode),
             ],
             [
-                # Same pack registers as the AC300: per-pack SOC at 99, with the
-                # pack selected through the write to 3006.
+                # Same pack registers as the AC300: pack voltage at 98 and
+                # per-pack SOC at 99, read through the write to 3006.
+                DecimalField(FieldName.PACK_VOLTAGE, 98, 2),
                 UIntField(FieldName.PACK_BATTERY_SOC, 99),
             ],
             # Ceiling, not the polled count: the reader stops at the pack count
