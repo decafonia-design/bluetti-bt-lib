@@ -46,6 +46,7 @@ Added and mostly validated by contributors (some are moved here from the HA Inte
 |EL30V2     |[@dgudim](https://github.com/dgudim)                                                   |✅                   |✅             |✅             |✅             |✅             |
 |EL100mini  |[@MadPB](https://github.com/MadPB)														|✅                   |✅             |✅             |✅             |✅             |
 |EL100V2    |[@seaburger](https://github.com/seaburger), [lesolas20](https://github.com/lesolas20)  |✅                   |✅             |✅             |✅             |✅             |
+|EL300      |[@suiciety](https://github.com/suiciety)                                               |✅                   |✅             |✅             |✅             |✅             |
 |EL200V2    |[@nlimper](https://github.com/nlimper)                                                 |✅                   |✅             |✅             |✅             |✅             |
 |EP500      |bluetti-mqtt                                                                           |✅                   |✅             |✅             |✅             |✅             |
 |EP500P     |bluetti-mqtt                                                                           |✅                   |✅             |✅             |✅             |✅             |
@@ -63,6 +64,7 @@ Added and mostly validated by contributors (some are moved here from the HA Inte
 - AC300, AP300, EL100V2, EL10 and Charger 2 — [@sidieje](https://github.com/sidieje)
 - AC200L — [@seaburger](https://github.com/seaburger)
 - EL30V2 — [@x3ccd4828](https://github.com/x3ccd4828)
+- EL300 — [@suiciety](https://github.com/suiciety)
 - Handsfree 2 — [@pablogiaccaglia](https://github.com/pablogiaccaglia)
 
 |Device Name|ctrl_ac|ctrl_dc|ctrl_ups_mode|ctrl_system_on_off|ctrl_silent_charging|
@@ -77,7 +79,8 @@ Added and mostly validated by contributors (some are moved here from the HA Inte
 |EL100mini  |✅     |✅     |✅           |❌                |❌                   |
 |EL100V2    |✅     |✅     |✅           |❌                |❌                   |
 |EL200V2    |✅     |✅     |✅           |❌                |❌                   |
-|EL30V2     |✅     |✅     |❌           |❌                |❌                   |
+|EL30V2     |✅     |✅     |✅           |❌                |❌                   |
+|EL300      |✅     |✅     |✅           |❌                |❌                   |
 |EP600      |✅     |❌     |❌           |❌                |❌                   |
 |Handsfree 1|✅     |✅     |❌           |❌                |❌                   |
 |Handsfree 2|✅     |✅     |❌           |❌                |❌                   |

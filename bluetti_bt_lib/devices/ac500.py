@@ -7,6 +7,7 @@ from ..fields import (
     SelectField,
     BoolField,
     SwitchField,
+    UIntField,
 )
 from ..enums import OutputMode, DisplayMode, UpsMode, SplitPhaseMode
 
@@ -23,6 +24,9 @@ class AC500(BaseDeviceV1):
                 DecimalField(FieldName.PV_S1_VOLTAGE, 86, 1),
                 DecimalField(FieldName.PV_S1_POWER, 87, 1, 10),
                 DecimalField(FieldName.PV_S1_CURRENT, 88, 2, 10),
+                # Packs actually installed. The reader polls this before the
+                # pack loop, so only the installed packs are selected.
+                UIntField(FieldName.PACK_NUM, 96),
                 SelectField(FieldName.CTRL_UPS_MODE, 3001, UpsMode),
                 BoolField(FieldName.CTRL_SPLIT_PHASE, 3004),
                 EnumField(FieldName.CTRL_SPLIT_PHASE_MODE, 3005, SplitPhaseMode),
@@ -50,4 +54,12 @@ class AC500(BaseDeviceV1):
                 ),
                 SelectField(FieldName.CTRL_DISPLAY_TIMEOUT, 3061, DisplayMode),
             ],
+            [
+                # Same pack registers as the AC300: per-pack SOC at 99, with the
+                # pack selected through the write to 3006.
+                UIntField(FieldName.PACK_BATTERY_SOC, 99),
+            ],
+            # Ceiling, not the polled count: the reader stops at the pack count
+            # register 96 reports. Two AC300 towers hold up to 6 packs.
+            max_packs=6,
         )

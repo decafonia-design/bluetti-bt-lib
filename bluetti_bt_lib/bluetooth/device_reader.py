@@ -9,6 +9,7 @@ from bleak_retry_connector import BleakClientWithServiceCache, establish_connect
 from .encryption import BluettiEncryption, Message, MessageType, AES_BLOCK_SIZE
 from ..base_devices import BluettiDevice
 from ..const import NOTIFY_UUID, WRITE_UUID
+from ..fields import FieldName
 from ..registers import ReadableRegisters, DeviceRegister
 from ..utils.privacy import mac_loggable
 
@@ -210,6 +211,35 @@ class DeviceReader:
             self.encrypted_buffer.clear()
             self._connected = False
 
+    def _pack_poll_count(self, parsed_data: dict) -> int:
+        """How many battery packs to poll this round.
+
+        The station reports the packs it actually has at register 96, and the
+        main register pass has already parsed it by the time the pack loop
+        runs. Polling only those packs saves a selector write plus the settle
+        delay for every empty slot, which matters most on the six-slot AC500.
+
+        The profile's max_packs stays a ceiling: it bounds a missing or
+        nonsensical reading so one bad register cannot stall the poll.
+        """
+        ceiling = self.bluetti_device.max_packs
+        reported = parsed_data.get(FieldName.PACK_NUM.value)
+
+        if not isinstance(reported, int):
+            # Profile without a pack_num field, or a read that skipped it.
+            return ceiling
+
+        if reported > ceiling:
+            self.logger.warning(
+                "Device reported %s packs, over the %s ceiling for %s; polling %s",
+                reported,
+                ceiling,
+                self.bluetti_device.__class__.__name__,
+                ceiling,
+            )
+
+        return max(0, min(reported, ceiling))
+
     async def read(
         self, only_registers: List[ReadableRegisters] | None = None, raw: bool = False
     ) -> dict | None:
@@ -260,7 +290,9 @@ class DeviceReader:
 
                         parsed_data.update(parsed)
 
-                    for pack in range(1, self.bluetti_device.max_packs + 1):
+                    pack_count = self._pack_poll_count(parsed_data)
+
+                    for pack in range(1, pack_count + 1):
                         body = register.parse_response(
                             await self._async_send_command(
                                 self.bluetti_device.get_pack_selector(pack),
