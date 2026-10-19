@@ -31,7 +31,7 @@ Added and mostly validated by contributors (some are moved here from the HA Inte
 |Device Name|Contributor                                                                            |total_battery_percent|dc_input_power |ac_input_power |dc_output_power|ac_output_power|
 |-----------|---------------------------------------------------------------------------------------|---------------------|---------------|---------------|---------------|---------------|
 |AC2A       |[@ruanmed](https://github.com/ruanmed)                                                 |✅                   |✅             |✅             |✅             |✅             |
-|AC50B      |[@goetzc](https://github.com/goetzc)                                                   |✅                   |❌             |✅             |✅             |✅             |
+|AC50B      |[@goetzc](https://github.com/goetzc), [@Patrick762](https://github.com/Patrick762)     |✅                   |✅             |✅             |✅             |✅             |
 |AC60       |[@mzpwr](https://github.com/mzpwr)                                                     |✅                   |✅             |✅             |✅             |✅             |
 |AC60P      |[@mzpwr](https://github.com/mzpwr)                                                     |✅                   |✅             |✅             |✅             |✅             |
 |AC70P      |[@matthewpucc](https://github.com/matthewpucc)                                         |✅                   |✅             |✅             |✅             |✅             |
@@ -67,23 +67,34 @@ Added and mostly validated by contributors (some are moved here from the HA Inte
 - EL300 — [@suiciety](https://github.com/suiciety)
 - Handsfree 2 — [@pablogiaccaglia](https://github.com/pablogiaccaglia)
 
-|Device Name|ctrl_ac|ctrl_dc|ctrl_ups_mode|ctrl_system_on_off|ctrl_silent_charging|
-|-----------|-------|-------|-------------|------------------|---------------------|
-|AC200L     |✅     |✅     |✅           |❌                |❌                   |
-|AC300      |✅     |✅     |✅           |❌                |❌                   |
-|AC500      |✅     |✅     |✅           |❌                |❌                   |
-|AP300      |✅     |✅     |✅           |❌                |❌                   |
-|Charger 2  |❌     |❌     |❌           |✅                |✅                   |
-|EB3A       |✅     |✅     |❌           |❌                |❌                   |
-|EL10       |✅     |✅     |❌           |❌                |❌                   |
-|EL100mini  |✅     |✅     |✅           |❌                |❌                   |
-|EL100V2    |✅     |✅     |✅           |❌                |❌                   |
-|EL200V2    |✅     |✅     |✅           |❌                |❌                   |
-|EL30V2     |✅     |✅     |✅           |❌                |❌                   |
-|EL300      |✅     |✅     |✅           |❌                |❌                   |
-|EP600      |✅     |❌     |❌           |❌                |❌                   |
-|Handsfree 1|✅     |✅     |❌           |❌                |❌                   |
-|Handsfree 2|✅     |✅     |❌           |❌                |❌                   |
+|Device Name|ctrl_ac|ctrl_dc|ctrl_ups_mode|soc_range_start|soc_range_end|
+|-----------|-------|-------|-------------|---------------|---------------|
+|AC200L     |✅     |✅     |✅           |✅             |✅             |
+|AC200M     |✅     |✅     |❌           |❌             |❌             |
+|AC200PL    |✅     |✅     |❌           |❌             |❌             |
+|AC300      |✅     |✅     |✅           |✅             |✅             |
+|AC500      |✅     |✅     |✅           |✅             |✅             |
+|AP300      |✅     |✅     |✅           |✅             |✅             |
+|EB3A       |✅     |✅     |❌           |❌             |❌             |
+|EL10       |✅     |✅     |❌           |❌             |❌             |
+|EL100mini  |✅     |✅     |✅           |✅             |✅             |
+|EL100V2    |✅     |✅     |✅           |✅             |✅             |
+|EL200V2    |✅     |✅     |✅           |✅             |✅             |
+|EL30V2     |✅     |✅     |✅           |✅             |✅             |
+|EL300      |✅     |✅     |✅           |✅             |✅             |
+|EP500      |✅     |✅     |✅           |✅             |✅             |
+|EP500P     |✅     |✅     |✅           |✅             |✅             |
+|EP600      |✅     |❌     |❌           |✅             |✅             |
+|Handsfree 1|✅     |✅     |❌           |❌             |❌             |
+|Handsfree 2|✅     |✅     |❌           |❌             |❌             |
+
+The AC200M, AC200PL, EP500 and EP500P rows come from their register maps, but their controls have not been tested through this library yet.
+
+The Charger 2 carries a different set of switches, so it gets its own table:
+
+|Device Name|ctrl_system_on_off|ctrl_silent_charging|
+|-----------|------------------|---------------------|
+|Charger 2  |✅                |✅                   |
 
 ## Installation
 
