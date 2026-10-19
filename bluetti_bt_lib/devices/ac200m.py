@@ -6,6 +6,7 @@ from ..fields import (
     SwitchField,
     SelectField,
     UIntField,
+    VersionField,
 )
 from ..enums import OutputMode, DisplayMode
 
@@ -14,6 +15,9 @@ class AC200M(BaseDeviceV1):
     def __init__(self):
         super().__init__(
             [
+                VersionField(FieldName.VER_ARM, 23),
+                VersionField(FieldName.VER_DSP, 25),
+                DecimalField(FieldName.POWER_GENERATION, 41, 1),
                 EnumField(FieldName.AC_OUTPUT_MODE, 70, OutputMode),
                 DecimalField(FieldName.INTERNAL_AC_VOLTAGE, 71, 1, 10),
                 DecimalField(FieldName.INTERNAL_AC_FREQUENCY, 74, 2, 10),
