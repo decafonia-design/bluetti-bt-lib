@@ -61,8 +61,9 @@ class AC500(BaseDeviceV1):
                 SelectField(FieldName.CTRL_DISPLAY_TIMEOUT, 3061, DisplayMode),
             ],
             [
-                # Same pack registers as the AC300: per-pack SOC at 99, with the
-                # pack selected through the write to 3006.
+                # Same pack registers as the AC300: pack voltage at 98 and
+                # per-pack SOC at 99, read through the write to 3006.
+                DecimalField(FieldName.PACK_VOLTAGE, 98, 2),
                 UIntField(FieldName.PACK_BATTERY_SOC, 99),
             ],
             # Ceiling, not the polled count: the reader stops at the pack count

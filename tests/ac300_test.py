@@ -8,10 +8,13 @@ class TestAC300(unittest.TestCase):
     def setUp(self):
         self.device = AC300()
 
-    def test_pack_fields_trimmed_to_soc(self):
-        # Only the per-pack SOC should remain; the read-only selected,
-        # voltage and 16 cell-voltage fields are dropped.
-        self.assertEqual([f.name for f in self.device.pack_fields], ["battery_soc"])
+    def test_pack_fields_trimmed_to_voltage_and_soc(self):
+        # The per-pack voltage and SOC stay; the read-only selected flag and
+        # the 16 cell-voltage fields are dropped.
+        self.assertEqual(
+            [f.name for f in self.device.pack_fields], ["voltage", "battery_soc"]
+        )
+        self.assertEqual([f.address for f in self.device.pack_fields], [98, 99])
         self.assertEqual(self.device.max_packs, 4)
 
     def test_power_generation_reads_register_41(self):

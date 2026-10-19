@@ -74,8 +74,10 @@ class TestACTowers(unittest.TestCase):
         for device_type in (AC300, AC500, AC200M):
             device = device_type()
             with self.subTest(device=device_type.__name__):
-                self.assertEqual([f.name for f in device.pack_fields], ["battery_soc"])
-                self.assertEqual(device.pack_fields[0].address, 99)
+                self.assertEqual(
+                    [f.name for f in device.pack_fields], ["voltage", "battery_soc"]
+                )
+                self.assertEqual([f.address for f in device.pack_fields], [98, 99])
                 self.assertGreater(device.max_packs, 0)
 
 

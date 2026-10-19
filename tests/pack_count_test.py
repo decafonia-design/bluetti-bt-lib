@@ -1,5 +1,6 @@
 import asyncio
 import unittest
+from decimal import Decimal
 
 from bluetti_bt_lib import DeviceReader
 from bluetti_bt_lib.devices import AC200M, AC300, AC500
@@ -21,7 +22,9 @@ class TestPackCount(unittest.TestCase):
                 device = device_cls()
                 field = next(f for f in device.fields if f.name == "pack_num")
                 self.assertEqual(field.address, 96)
-                self.assertEqual([f.name for f in device.pack_fields], ["battery_soc"])
+                self.assertEqual(
+                    [f.name for f in device.pack_fields], ["voltage", "battery_soc"]
+                )
                 self.assertGreater(device.max_packs, 0)
 
     def test_max_packs_is_a_ceiling_not_the_polled_count(self):
@@ -54,6 +57,7 @@ class TestPackPolling(unittest.IsolatedAsyncioTestCase):
         ble_mock.add_r_sn(17, 2551110023321)
         ble_mock.add_r_int(43, 80)
         ble_mock.add_r_int(96, 2)
+        ble_mock.add_r_int(98, 5120)
         ble_mock.add_r_int(99, 77)
 
         reader = DeviceReader(
@@ -69,9 +73,14 @@ class TestPackPolling(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(data.get("pack_num"), 2)
         self.assertEqual(data.get("pack_1_battery_soc"), 77)
         self.assertEqual(data.get("pack_2_battery_soc"), 77)
+        # Register 98 is centivolts, so 5120 reads as 51.2 V per pack.
+        self.assertEqual(data.get("pack_1_voltage"), Decimal("51.2"))
+        self.assertEqual(data.get("pack_2_voltage"), Decimal("51.2"))
         # Slots 3 to 6 are empty, so they are never selected or parsed.
         self.assertNotIn("pack_3_battery_soc", data)
         self.assertNotIn("pack_6_battery_soc", data)
+        self.assertNotIn("pack_3_voltage", data)
+        self.assertNotIn("pack_6_voltage", data)
 
 
 if __name__ == "__main__":
