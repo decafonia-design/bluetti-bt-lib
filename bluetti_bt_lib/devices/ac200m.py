@@ -24,8 +24,9 @@ class AC200M(BaseDeviceV1):
                 DecimalField(FieldName.INTERNAL_DC_INPUT_VOLTAGE, 86, 1),
                 DecimalField(FieldName.INTERNAL_DC_INPUT_POWER, 87, 1, 10),
                 DecimalField(FieldName.INTERNAL_DC_INPUT_CURRENT, 88, 2),
-                # Packs actually installed. The reader polls this before the
-                # pack loop, so only the installed packs are selected.
+                # How many packs are installed. The reader polls it before the
+                # pack walk and uses it to stop early, but it does not say
+                # which slots are occupied, so it cannot pick them out.
                 UIntField(FieldName.PACK_NUM, 96),
                 SwitchField(FieldName.CTRL_AC, 3007),
                 SwitchField(FieldName.CTRL_DC, 3008),
@@ -38,8 +39,8 @@ class AC200M(BaseDeviceV1):
                 DecimalField(FieldName.PACK_VOLTAGE, 98, 2),
                 UIntField(FieldName.PACK_BATTERY_SOC, 99),
             ],
-            # Ceiling, not the polled count: the reader stops at the pack count
-            # register 96 reports. The AC200M holds an internal pack plus two
-            # expansion packs.
+            # Every slot the station can hold: an internal pack plus two
+            # expansion packs. The reader walks all three and drops the empty
+            # ones.
             max_packs=3,
         )

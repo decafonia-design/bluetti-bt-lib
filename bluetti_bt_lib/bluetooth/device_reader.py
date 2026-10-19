@@ -1,5 +1,7 @@
 import asyncio
 import logging
+from decimal import Decimal
+
 import async_timeout
 from typing import Any, Callable, List, cast
 from bleak import BleakClient, BleakScanner
@@ -12,6 +14,10 @@ from ..const import NOTIFY_UUID, WRITE_UUID
 from ..fields import FieldName
 from ..registers import ReadableRegisters, DeviceRegister
 from ..utils.privacy import mac_loggable
+
+# A station needs a moment after the pack selector is written before its pack
+# registers hold the data of the newly selected pack.
+PACK_SELECTOR_SETTLE_SECONDS = 3
 
 
 class DeviceReaderConfig:
@@ -211,34 +217,25 @@ class DeviceReader:
             self.encrypted_buffer.clear()
             self._connected = False
 
-    def _pack_poll_count(self, parsed_data: dict) -> int:
-        """How many battery packs to poll this round.
+    @staticmethod
+    def _pack_has_data(pack_data: dict) -> bool:
+        """Whether a pack slot is actually occupied.
 
-        The station reports the packs it actually has at register 96, and the
-        main register pass has already parsed it by the time the pack loop
-        runs. Polling only those packs saves a selector write plus the settle
-        delay for every empty slot, which matters most on the six-slot AC500.
-
-        The profile's max_packs stays a ceiling: it bounds a missing or
-        nonsensical reading so one bad register cannot stall the poll.
+        An empty slot answers every pack register with zero. A real pack
+        always reports a voltage, even when it is fully drained, so an
+        all-zero answer means nothing is sitting in that slot.
         """
-        ceiling = self.bluetti_device.max_packs
-        reported = parsed_data.get(FieldName.PACK_NUM.value)
+        for value in pack_data.values():
+            if isinstance(value, bytes):
+                if value.strip(b"\x00"):
+                    return True
+            elif isinstance(value, (int, Decimal)):
+                if value:
+                    return True
+            elif value:
+                return True
 
-        if not isinstance(reported, int):
-            # Profile without a pack_num field, or a read that skipped it.
-            return ceiling
-
-        if reported > ceiling:
-            self.logger.warning(
-                "Device reported %s packs, over the %s ceiling for %s; polling %s",
-                reported,
-                ceiling,
-                self.bluetti_device.__class__.__name__,
-                ceiling,
-            )
-
-        return max(0, min(reported, ceiling))
+        return False
 
     async def read(
         self, only_registers: List[ReadableRegisters] | None = None, raw: bool = False
@@ -290,9 +287,26 @@ class DeviceReader:
 
                         parsed_data.update(parsed)
 
-                    pack_count = self._pack_poll_count(parsed_data)
+                    # Register 96 counts the packs that are installed, but it
+                    # does not say which slots they occupy: an AC300 holding
+                    # packs in slots 2, 3 and 4 still reports 3. So the walk
+                    # covers every slot the station can hold, and stops early
+                    # once the reported number of packs have answered.
+                    installed = parsed_data.get(FieldName.PACK_NUM.value)
+                    if not isinstance(installed, int) or installed < 0:
+                        # Profile without a pack_num field, or a bad reading.
+                        installed = None
+                    if raw:
+                        # Raw scans report every slot, empty ones included.
+                        installed = None
 
-                    for pack in range(1, pack_count + 1):
+                    slot_limit = self.bluetti_device.max_packs if pack_registers else 0
+                    found_packs = 0
+
+                    for pack in range(1, slot_limit + 1):
+                        if installed is not None and found_packs >= installed:
+                            break
+
                         body = register.parse_response(
                             await self._async_send_command(
                                 self.bluetti_device.get_pack_selector(pack),
@@ -300,7 +314,9 @@ class DeviceReader:
                         )
 
                         # We need to wait for the powerstation to populate all registers
-                        await asyncio.sleep(3)
+                        await asyncio.sleep(PACK_SELECTOR_SETTLE_SECONDS)
+
+                        pack_data: dict = {}
 
                         for register in pack_registers:
                             body = register.parse_response(
@@ -310,9 +326,7 @@ class DeviceReader:
                             self.logger.debug("Raw data: %s", body)
 
                             if raw:
-                                d = {}
-                                d[register.starting_address] = body
-                                parsed_data.update(d)
+                                pack_data[register.starting_address] = body
                                 continue
 
                             parsed = self.bluetti_device.parse(
@@ -323,7 +337,24 @@ class DeviceReader:
 
                             self.logger.debug("Parsed data: %s", parsed)
 
-                            parsed_data.update(parsed)
+                            pack_data.update(parsed)
+
+                        if raw or self._pack_has_data(pack_data):
+                            parsed_data.update(pack_data)
+                            found_packs += 1
+                        else:
+                            self.logger.debug(
+                                "Pack slot %s answered with nothing, treating it as empty",
+                                pack,
+                            )
+
+                    if installed is not None and found_packs != installed:
+                        self.logger.debug(
+                            "Station reported %s packs, %s answered in slots 1-%s",
+                            installed,
+                            found_packs,
+                            slot_limit,
+                        )
 
             except TimeoutError:
                 self.logger.warning("Timeout")

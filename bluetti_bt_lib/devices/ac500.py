@@ -30,8 +30,9 @@ class AC500(BaseDeviceV1):
                 DecimalField(FieldName.PV_S1_VOLTAGE, 86, 1),
                 DecimalField(FieldName.PV_S1_POWER, 87, 1, 10),
                 DecimalField(FieldName.PV_S1_CURRENT, 88, 2, 10),
-                # Packs actually installed. The reader polls this before the
-                # pack loop, so only the installed packs are selected.
+                # How many packs are installed. The reader polls it before the
+                # pack walk and uses it to stop early, but it does not say
+                # which slots are occupied, so it cannot pick them out.
                 UIntField(FieldName.PACK_NUM, 96),
                 SelectField(FieldName.CTRL_UPS_MODE, 3001, UpsMode),
                 BoolField(FieldName.CTRL_SPLIT_PHASE, 3004),
@@ -66,7 +67,8 @@ class AC500(BaseDeviceV1):
                 DecimalField(FieldName.PACK_VOLTAGE, 98, 2),
                 UIntField(FieldName.PACK_BATTERY_SOC, 99),
             ],
-            # Ceiling, not the polled count: the reader stops at the pack count
-            # register 96 reports. Two AC300 towers hold up to 6 packs.
+            # Every slot the tower can hold. The reader walks all of them and
+            # drops the ones that answer with nothing, because register 96
+            # counts packs without saying which slots they sit in.
             max_packs=6,
         )

@@ -1,8 +1,12 @@
 import asyncio
+import struct
 import unittest
 from decimal import Decimal
+from unittest.mock import patch
 
 from bluetti_bt_lib import DeviceReader
+from bluetti_bt_lib.base_devices import BaseDeviceV1
+from bluetti_bt_lib.bluetooth import device_reader
 from bluetti_bt_lib.devices import AC200M, AC300, AC500
 from bluetti_bt_lib.utils.bleak_client_mock import ClientMockNoEncryption
 
@@ -10,12 +14,48 @@ from bluetti_bt_lib.utils.bleak_client_mock import ClientMockNoEncryption
 # and keep the per-pack data behind the pack selector at 3006.
 PACK_STATIONS = (AC200M, AC300, AC500)
 
+PACK_VOLTAGE_REGISTER = 98
+PACK_SOC_REGISTER = 99
+PACK_SELECTOR_REGISTER = 3006
 
-def _reader(device):
-    return DeviceReader("00:11:00:11:00:11", device, asyncio.Future)
+
+class SlotAwareMock(ClientMockNoEncryption):
+    """Answers the pack registers per slot, with empty slots reading as zero."""
+
+    def __init__(self, packs: dict[int, tuple[int, int]]) -> None:
+        super().__init__()
+        self.packs = packs
+        self.selected: list[int] = []
+        self._slot = 0
+
+    async def write_gatt_char(self, char, data, response=None) -> None:
+        command = struct.unpack_from("!HHHH", data)
+        if command[1] == PACK_SELECTOR_REGISTER:
+            self._slot = command[2]
+            self.selected.append(self._slot)
+        await super().write_gatt_char(char, data, response)
+
+    def _get_register(self, starting_address: int, size: int) -> bytes:
+        if starting_address in (PACK_VOLTAGE_REGISTER, PACK_SOC_REGISTER):
+            voltage, soc = self.packs.get(self._slot, (0, 0))
+            self.add_r_int(PACK_VOLTAGE_REGISTER, voltage)
+            self.add_r_int(PACK_SOC_REGISTER, soc)
+        return super()._get_register(starting_address, size)
 
 
-class TestPackCount(unittest.TestCase):
+async def _read(device, ble_mock):
+    reader = DeviceReader(
+        "00:11:00:11:00:11",
+        device,
+        asyncio.Future,
+        ble_client=ble_mock,
+    )
+    # The reader waits for the station to switch packs; no need to wait in tests.
+    with patch.object(device_reader, "PACK_SELECTOR_SETTLE_SECONDS", 0):
+        return await reader.read()
+
+
+class TestPackLayout(unittest.TestCase):
     def test_pack_stations_read_pack_num_at_96(self):
         for device_cls in PACK_STATIONS:
             with self.subTest(device=device_cls.__name__):
@@ -27,47 +67,88 @@ class TestPackCount(unittest.TestCase):
                 )
                 self.assertGreater(device.max_packs, 0)
 
-    def test_max_packs_is_a_ceiling_not_the_polled_count(self):
-        # Slots each station physically holds, used only to bound a bad or
-        # missing reading.
+    def test_max_packs_is_the_slots_a_station_holds(self):
+        # The reader walks every slot, so this is how far an empty station goes.
         self.assertEqual(AC200M().max_packs, 3)
         self.assertEqual(AC300().max_packs, 4)
         self.assertEqual(AC500().max_packs, 6)
 
-    def test_installed_count_is_used(self):
-        self.assertEqual(_reader(AC500())._pack_poll_count({"pack_num": 2}), 2)
 
-    def test_no_packs_skips_the_pack_poll(self):
-        self.assertEqual(_reader(AC500())._pack_poll_count({"pack_num": 0}), 0)
+class TestPackSlots(unittest.IsolatedAsyncioTestCase):
+    async def _read(self, device: BaseDeviceV1, packs: dict, pack_num: int):
+        ble_mock = SlotAwareMock(packs)
+        ble_mock.add_r_int(96, pack_num)
+        return await _read(device, ble_mock), ble_mock
 
-    def test_missing_reading_falls_back_to_the_ceiling(self):
-        # Profiles without a pack_num field, or a read that excluded it.
-        self.assertEqual(_reader(AC500())._pack_poll_count({}), 6)
-        self.assertEqual(_reader(AC500())._pack_poll_count({"pack_num": None}), 6)
+    async def test_packs_do_not_have_to_start_at_slot_one(self):
+        # The reported case: an AC300 with the bottom slot empty.
+        data, ble_mock = await self._read(
+            AC300(), {2: (5120, 80), 3: (5110, 70), 4: (5100, 60)}, pack_num=3
+        )
 
-    def test_reported_count_is_clamped_to_the_ceiling(self):
-        self.assertEqual(_reader(AC300())._pack_poll_count({"pack_num": 9}), 4)
-        self.assertEqual(_reader(AC200M())._pack_poll_count({"pack_num": 99}), 3)
+        self.assertEqual(data.get("pack_num"), 3)
+        self.assertNotIn("pack_1_voltage", data)
+        self.assertNotIn("pack_1_battery_soc", data)
+        self.assertEqual(data.get("pack_2_voltage"), Decimal("51.2"))
+        self.assertEqual(data.get("pack_3_voltage"), Decimal("51.1"))
+        self.assertEqual(data.get("pack_4_voltage"), Decimal("51.0"))
+        self.assertEqual(data.get("pack_4_battery_soc"), 60)
+
+    async def test_empty_slots_between_packs_are_skipped(self):
+        data, ble_mock = await self._read(
+            AC500(), {2: (5120, 80), 4: (5100, 60)}, pack_num=2
+        )
+
+        # The gaps have to be walked, so the walk reaches slot 4 and stops.
+        self.assertEqual(ble_mock.selected, [1, 2, 3, 4])
+        self.assertEqual(data.get("pack_2_voltage"), Decimal("51.2"))
+        self.assertEqual(data.get("pack_4_voltage"), Decimal("51.0"))
+        for slot in (1, 3, 5, 6):
+            self.assertNotIn(f"pack_{slot}_voltage", data)
+            self.assertNotIn(f"pack_{slot}_battery_soc", data)
+
+    async def test_walk_stops_once_the_reported_packs_have_answered(self):
+        data, ble_mock = await self._read(
+            AC500(), {1: (5120, 80), 2: (5110, 70)}, pack_num=2
+        )
+
+        self.assertEqual(ble_mock.selected, [1, 2])
+        self.assertEqual(data.get("pack_2_voltage"), Decimal("51.1"))
+        self.assertNotIn("pack_3_voltage", data)
+        self.assertNotIn("pack_6_battery_soc", data)
+
+    async def test_no_packs_reported_skips_the_walk(self):
+        data, ble_mock = await self._read(AC300(), {}, pack_num=0)
+
+        self.assertEqual(ble_mock.selected, [])
+        self.assertEqual(data.get("pack_num"), 0)
+        self.assertNotIn("pack_1_voltage", data)
+
+    async def test_missing_pack_num_walks_every_slot(self):
+        # A profile without a pack_num field leaves nothing to stop the walk
+        # short of the slots the device says it holds.
+        device = AC500()
+        device.fields = [f for f in device.fields if f.name != "pack_num"]
+
+        ble_mock = SlotAwareMock({5: (5100, 60)})
+        data = await _read(device, ble_mock)
+
+        self.assertEqual(ble_mock.selected, [1, 2, 3, 4, 5, 6])
+        self.assertEqual(data.get("pack_5_voltage"), Decimal("51.0"))
+        self.assertNotIn("pack_6_voltage", data)
 
 
 class TestPackPolling(unittest.IsolatedAsyncioTestCase):
-    async def test_only_installed_packs_are_polled(self):
+    async def test_installed_packs_are_read_from_the_shared_map(self):
         ble_mock = ClientMockNoEncryption()
         ble_mock.add_r_str(10, "AC500", 6)
         ble_mock.add_r_sn(17, 2551110023321)
         ble_mock.add_r_int(43, 80)
         ble_mock.add_r_int(96, 2)
-        ble_mock.add_r_int(98, 5120)
-        ble_mock.add_r_int(99, 77)
+        ble_mock.add_r_int(PACK_VOLTAGE_REGISTER, 5120)
+        ble_mock.add_r_int(PACK_SOC_REGISTER, 77)
 
-        reader = DeviceReader(
-            "00:11:00:11:00:11",
-            AC500(),
-            asyncio.Future,
-            ble_client=ble_mock,
-        )
-
-        data = await reader.read()
+        data = await _read(AC500(), ble_mock)
 
         self.assertIsNotNone(data)
         self.assertEqual(data.get("pack_num"), 2)
@@ -76,7 +157,7 @@ class TestPackPolling(unittest.IsolatedAsyncioTestCase):
         # Register 98 is centivolts, so 5120 reads as 51.2 V per pack.
         self.assertEqual(data.get("pack_1_voltage"), Decimal("51.2"))
         self.assertEqual(data.get("pack_2_voltage"), Decimal("51.2"))
-        # Slots 3 to 6 are empty, so they are never selected or parsed.
+        # Register 96 says two packs, so slots 3 to 6 are never selected.
         self.assertNotIn("pack_3_battery_soc", data)
         self.assertNotIn("pack_6_battery_soc", data)
         self.assertNotIn("pack_3_voltage", data)
