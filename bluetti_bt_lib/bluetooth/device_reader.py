@@ -7,6 +7,7 @@ from typing import Any, Callable, List, cast
 from bleak import BleakClient, BleakScanner
 from bleak.exc import BleakError
 from bleak_retry_connector import BleakClientWithServiceCache, establish_connection
+from cryptography.exceptions import InvalidSignature
 
 from .encryption import BluettiEncryption, Message, MessageType, AES_BLOCK_SIZE
 from ..base_devices import BluettiDevice
@@ -21,6 +22,11 @@ PACK_SELECTOR_SETTLE_SECONDS = 3
 
 # How long a single request waits for its answer.
 RESPONSE_TIMEOUT_SECONDS = 5
+
+# How long a fresh connection gets to finish its key exchange. The device
+# starts the exchange on its own once notifications are on, so it normally
+# takes a second or two.
+HANDSHAKE_TIMEOUT_SECONDS = 20
 
 
 class ResponseTimeout(Exception):
@@ -77,6 +83,8 @@ class DeviceReader:
         self.notify_future: asyncio.Future[Any] | None = None
         self.encryption = BluettiEncryption()
         self.encrypted_buffer = bytearray()
+        self.handshake_failed = False
+        """Set when the key exchange cannot complete; only a reconnect fixes it."""
         self._connected = False
 
     async def connect(self) -> bool:
@@ -129,9 +137,10 @@ class DeviceReader:
             self.logger.debug("Connected to device")
 
             if self.config.use_encryption:
-                while not self.encryption.is_ready_for_commands:
-                    await asyncio.sleep(1)
-                    self.logger.debug("Waiting for encryption handshake...")
+                self.handshake_failed = False
+                if not await self._await_handshake():
+                    await self._abandon_handshake()
+                    return False
 
             self._connected = True
             return True
@@ -189,6 +198,68 @@ class DeviceReader:
             return
 
         self._connected = False
+
+        if self.has_notifier and self.client:
+            try:
+                await self.client.stop_notify(NOTIFY_UUID)
+            except Exception:
+                pass
+            self.has_notifier = False
+            self._notified_client = None
+
+        if self.client and self.client.is_connected:
+            try:
+                await self.client.disconnect()
+            except Exception:
+                pass
+
+        self.encryption.reset()
+        self.encrypted_buffer.clear()
+
+    async def _await_handshake(self) -> bool:
+        """Wait for the key exchange of a fresh connection to finish.
+
+        A failed exchange never recovers over a live link: the peer only sends
+        a new challenge on a new connection. Waiting longer than the deadline
+        would just burn the caller's timeout and leave a half-open connection
+        behind, which the next connect() would stack a second link on top of.
+        """
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + HANDSHAKE_TIMEOUT_SECONDS
+
+        while not self.encryption.is_ready_for_commands:
+            if self.handshake_failed:
+                self.logger.warning(
+                    "Key exchange failed, reconnecting on the next read"
+                )
+                return False
+
+            if loop.time() >= deadline:
+                self.logger.warning(
+                    "Key exchange did not complete within %ss, reconnecting",
+                    HANDSHAKE_TIMEOUT_SECONDS,
+                )
+                return False
+
+            await asyncio.sleep(1)
+            self.logger.debug("Waiting for encryption handshake...")
+
+        return True
+
+    async def _abandon_handshake(self) -> None:
+        """Tear down a link whose key exchange cannot complete.
+
+        Unlike _mark_disconnected() this also closes a caller-supplied client:
+        a live link without a session can never carry a command, and dropping
+        it is the only way to get the peer to restart the exchange. The owner
+        of a supplied client rebuilds the connection from its disconnect
+        callback.
+        """
+        self.handshake_failed = False
+        self._connected = False
+        self.current_registers = None
+        self.notify_response = bytearray()
+        self.notify_future = None
 
         if self.has_notifier and self.client:
             try:
@@ -307,10 +378,18 @@ class DeviceReader:
 
                     self.logger.debug("Connected to device")
 
-                    if self.config.use_encryption:
-                        while not self.encryption.is_ready_for_commands:
-                            await asyncio.sleep(1)
-                            self.logger.debug("Waiting for encryption handshake...")
+                    if self.config.use_encryption and not (
+                        self.encryption.is_ready_for_commands
+                    ):
+                        # connect() only reports success with a finished
+                        # exchange, so the session broke since the link came
+                        # up. Only a new connection makes the peer issue a
+                        # fresh challenge.
+                        self.logger.warning(
+                            "Encryption session is not ready, reconnecting"
+                        )
+                        await self._abandon_handshake()
+                        return None
 
                     for register in registers:
                         body = register.parse_response(
@@ -457,9 +536,15 @@ class DeviceReader:
                     if not await self.connect():
                         return None
 
-                if self.config.use_encryption:
-                    while not self.encryption.is_ready_for_commands:
-                        await asyncio.sleep(1)
+                if self.config.use_encryption and not (
+                    self.encryption.is_ready_for_commands
+                ):
+                    # Same recovery as read(): the next call reconnects.
+                    self.logger.warning(
+                        "Encryption session is not ready, reconnecting"
+                    )
+                    await self._abandon_handshake()
+                    return None
 
                 for register in only_registers:
                     body = register.parse_response(
@@ -580,6 +665,22 @@ class DeviceReader:
 
         return header_size + padded_len
 
+    async def _write_handshake(self, payload: bytes, what: str) -> bool:
+        """Send a key exchange reply.
+
+        A BleakError raised inside a notification callback is swallowed by
+        bleak's dispatch, which leaves the read waiting its full timeout with
+        nothing in the log naming the cause. Catching it here and flagging the
+        handshake lets the read give the connection up instead.
+        """
+        try:
+            await self.client.write_gatt_char(WRITE_UUID, payload)
+            return True
+        except BleakError as err:
+            self.logger.warning("Failed to send the %s: %s", what, err)
+            self.handshake_failed = True
+            return False
+
     async def _notification_handler(self, _: int, data: bytearray):
         """Handle bt data."""
         self.logger.debug("Got new data (%d bytes)", len(data))
@@ -590,12 +691,23 @@ class DeviceReader:
             if message.is_pre_key_exchange:
                 message.verify_checksum()
 
-                if message.type == MessageType.CHALLENGE:
-                    challenge_response = self.encryption.msg_challenge(message)
-                    await self.client.write_gatt_char(WRITE_UUID, challenge_response)
+                try:
+                    message_type = message.type
+                except ValueError:
+                    # Unknown frame. bleak runs this callback as a detached
+                    # task, so raising here is silent and the read hangs.
+                    self.logger.warning("Unknown key exchange message type")
                     return
 
-                if message.type == MessageType.CHALLENGE_ACCEPTED:
+                if message_type == MessageType.CHALLENGE:
+                    challenge_response = self.encryption.msg_challenge(message)
+                    if challenge_response is not None:
+                        await self._write_handshake(
+                            challenge_response, "challenge response"
+                        )
+                    return
+
+                if message_type == MessageType.CHALLENGE_ACCEPTED:
                     self.logger.debug("Challenge accepted")
                     return
 
@@ -645,14 +757,60 @@ class DeviceReader:
             if decrypted.is_pre_key_exchange:
                 decrypted.verify_checksum()
 
-                if decrypted.type == MessageType.PEER_PUBKEY:
-                    peer_pubkey_response = self.encryption.msg_peer_pubkey(decrypted)
-                    await self.client.write_gatt_char(WRITE_UUID, peer_pubkey_response)
+                try:
+                    decrypted_type = decrypted.type
+                except ValueError:
+                    self.logger.warning("Unknown key exchange message type")
                     return
 
-                if decrypted.type == MessageType.PUBKEY_ACCEPTED:
-                    self.encryption.msg_key_accepted(decrypted)
+                if decrypted_type == MessageType.CHALLENGE:
+                    # A device can restart the exchange inside the encrypted
+                    # channel. This is what refreshes the IV that the peer
+                    # pubkey is later verified against, so skipping it makes
+                    # every following pubkey signature look invalid.
+                    challenge_response = self.encryption.msg_challenge(decrypted)
+                    if challenge_response is not None:
+                        await self._write_handshake(
+                            self.encryption.aes_encrypt(challenge_response, key, None),
+                            "challenge response",
+                        )
                     return
+
+                if decrypted_type == MessageType.CHALLENGE_ACCEPTED:
+                    self.logger.debug("Challenge accepted (encrypted)")
+                    return
+
+                if decrypted_type == MessageType.PEER_PUBKEY:
+                    try:
+                        peer_pubkey_response = self.encryption.msg_peer_pubkey(
+                            decrypted
+                        )
+                    except InvalidSignature:
+                        # Almost always a stale IV: drop the session and let
+                        # the next connection restart the exchange rather than
+                        # leaving the link wedged.
+                        self.logger.warning(
+                            "Peer pubkey signature rejected, reconnecting"
+                        )
+                        self.encryption.reset()
+                        self.encrypted_buffer.clear()
+                        self.handshake_failed = True
+                        return
+                    await self._write_handshake(
+                        peer_pubkey_response, "peer pubkey reply"
+                    )
+                    return
+
+                if decrypted_type == MessageType.PUBKEY_ACCEPTED:
+                    try:
+                        self.encryption.msg_key_accepted(decrypted)
+                    except (ValueError, AttributeError) as err:
+                        self.logger.warning("Key exchange rejected: %s", err)
+                        self.handshake_failed = True
+                    return
+
+                # A key exchange frame is never MODBUS data.
+                return
 
             # Handle as message
             data = decrypted.buffer
