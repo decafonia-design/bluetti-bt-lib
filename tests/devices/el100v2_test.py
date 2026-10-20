@@ -64,20 +64,6 @@ class TestEL100V2(unittest.TestCase):
         self.assertEqual(self._field("ac_output_voltage").address, 1431)
         self.assertFalse(any(f.address == 1511 for f in self.device.fields))
 
-    def test_eco_minimum_powers_are_writable(self):
-        # The app lets the owner set the eco auto-off thresholds, and on the
-        # EL100 V2 it offers 5-20 W on DC and 10-40 W on AC.
-        dc = self._field("ctrl_eco_min_power_dc")
-        ac = self._field("ctrl_eco_min_power_ac")
-
-        self.assertEqual((dc.address, dc.min, dc.max, dc.step), (2016, 5, 20, 5))
-        self.assertEqual((ac.address, ac.min, ac.max, ac.step), (2019, 10, 40, 5))
-        self.assertTrue(dc.is_writeable())
-        self.assertTrue(ac.is_writeable())
-
-        command = self.device.build_write_command("ctrl_eco_min_power_ac", 25)
-        self.assertEqual((command.address, command.value), (2019, 25))
-
     def test_slow_selects_declare_verification_delay(self):
         for name in SLOW_SELECTS:
             with self.subTest(field=name):

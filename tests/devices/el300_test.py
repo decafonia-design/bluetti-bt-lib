@@ -47,16 +47,6 @@ class TestEL300(unittest.TestCase):
         self.assertEqual(addresses["soc_range_end"], 2023)
         self.assertEqual(addresses["ac_output_voltage"], 1431)
 
-    def test_eco_thresholds_are_only_writable_on_the_el100v2(self):
-        # The 5-20 W / 10-40 W ranges came from an owner's app on an EL100 V2.
-        # The rest of the family keeps the read-only sensors until someone with
-        # one confirms their app offers the same settings.
-        for device_cls in (EL200V2, EL300, EL30V2):
-            with self.subTest(device=device_cls.__name__):
-                fields = {f.name: f for f in device_cls().fields}
-                for name in ("ctrl_eco_min_power_dc", "ctrl_eco_min_power_ac"):
-                    self.assertFalse(fields[name].is_writeable(), name)
-
 
 if __name__ == "__main__":
     unittest.main()

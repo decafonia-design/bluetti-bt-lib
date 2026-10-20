@@ -38,10 +38,12 @@ class EL100mini(BaseDeviceV2):
                 SwitchField(FieldName.CTRL_DC, 2012),
                 SwitchField(FieldName.CTRL_ECO_DC, 2014),
                 SelectField(FieldName.CTRL_ECO_TIME_MODE_DC, 2015, EcoMode),
-                UIntField(FieldName.CTRL_ECO_MIN_POWER_DC, 2016),
+                # Same eco thresholds as the other Elite portables: 5-20 W DC,
+                # 10-40 W AC.
+                NumberField(FieldName.CTRL_ECO_MIN_POWER_DC, 2016, 1, 5, 20, 5),
                 SwitchField(FieldName.CTRL_ECO_AC, 2017),
                 SelectField(FieldName.CTRL_ECO_TIME_MODE_AC, 2018, EcoMode),
-                UIntField(FieldName.CTRL_ECO_MIN_POWER_AC, 2019),
+                NumberField(FieldName.CTRL_ECO_MIN_POWER_AC, 2019, 1, 10, 40, 5),
                 SelectField(FieldName.CTRL_CHARGING_MODE, 2020, ChargingMode),
                 SwitchField(FieldName.CTRL_POWER_LIFTING, 2021),
                 NumberField(

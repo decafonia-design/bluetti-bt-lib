@@ -67,28 +67,34 @@ Added and mostly validated by contributors (some are moved here from the HA Inte
 - EL300 — [@suiciety](https://github.com/suiciety)
 - Handsfree 2 — [@pablogiaccaglia](https://github.com/pablogiaccaglia)
 
-|Device Name|ctrl_ac|ctrl_dc|ctrl_ups_mode|soc_range_start|soc_range_end|
-|-----------|-------|-------|-------------|---------------|---------------|
-|AC200L     |✅     |✅     |✅           |✅             |✅             |
-|AC200M     |✅     |✅     |❌           |❌             |❌             |
-|AC200PL    |✅     |✅     |❌           |❌             |❌             |
-|AC300      |✅     |✅     |✅           |✅             |✅             |
-|AC500      |✅     |✅     |✅           |✅             |✅             |
-|AP300      |✅     |✅     |✅           |✅             |✅             |
-|EB3A       |✅     |✅     |❌           |❌             |❌             |
-|EL10       |✅     |✅     |❌           |❌             |❌             |
-|EL100mini  |✅     |✅     |✅           |✅             |✅             |
-|EL100V2    |✅     |✅     |✅           |✅             |✅             |
-|EL200V2    |✅     |✅     |✅           |✅             |✅             |
-|EL30V2     |✅     |✅     |✅           |✅             |✅             |
-|EL300      |✅     |✅     |✅           |✅             |✅             |
-|EP500      |✅     |✅     |✅           |✅             |✅             |
-|EP500P     |✅     |✅     |✅           |✅             |✅             |
-|EP600      |✅     |❌     |❌           |✅             |✅             |
-|Handsfree 1|✅     |✅     |❌           |❌             |❌             |
-|Handsfree 2|✅     |✅     |❌           |❌             |❌             |
+|Device Name|ctrl_ac|ctrl_dc|ctrl_ups_mode|soc_range_start|soc_range_end|ctrl_eco_min_power|
+|-----------|-------|-------|-------------|---------------|---------------|------------------|
+|AC200L     |✅     |✅     |✅           |✅             |✅             |❌                |
+|AC200M     |✅     |✅     |❌           |❌             |❌             |❌                |
+|AC200PL    |✅     |✅     |❌           |❌             |❌             |❌                |
+|AC300      |✅     |✅     |✅           |✅             |✅             |❌                |
+|AC500      |✅     |✅     |✅           |✅             |✅             |❌                |
+|AP300      |✅     |✅     |✅           |✅             |✅             |✅                |
+|EB3A       |✅     |✅     |❌           |❌             |❌             |❌                |
+|EL10       |✅     |✅     |❌           |❌             |❌             |✅                |
+|EL100mini  |✅     |✅     |✅           |✅             |✅             |✅                |
+|EL100V2    |✅     |✅     |✅           |✅             |✅             |✅                |
+|EL200V2    |✅     |✅     |✅           |✅             |✅             |❌                |
+|EL30V2     |✅     |✅     |✅           |✅             |✅             |❌                |
+|EL300      |✅     |✅     |✅           |✅             |✅             |❌                |
+|EP500      |✅     |✅     |✅           |✅             |✅             |❌                |
+|EP500P     |✅     |✅     |✅           |✅             |✅             |❌                |
+|EP600      |✅     |❌     |❌           |✅             |✅             |❌                |
+|Handsfree 1|✅     |✅     |❌           |❌             |❌             |❌                |
+|Handsfree 2|✅     |✅     |❌           |❌             |❌             |❌                |
 
 The AC200M, AC200PL, EP500 and EP500P rows come from their register maps, but their controls have not been tested through this library yet.
+
+The eco auto-off thresholds (registers 2016 and 2019) are readable on most
+Elite portables, but they are only writable where an owner has confirmed the
+Bluetti app offers them, and the ranges differ per model: 5-20 W on DC and
+10-40 W on AC for the AP300, EL100 mini and EL100 V2, and 5-10 W / 15-30 W on
+the EL10.
 
 The Charger 2 carries a different set of switches, so it gets its own table:
 
