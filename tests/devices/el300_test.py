@@ -6,7 +6,12 @@ from bluetti_bt_lib.utils.device_builder import build_device
 # These portables share one register map, so their device files are kept as
 # copies of the same layout. The copies stay unified on purpose; this test
 # fails if one of them drifts away from the others.
-UNIFIED_LAYOUT_DEVICES = (EL100V2, EL200V2, EL300, EL30V2)
+UNIFIED_LAYOUT_DEVICES = (EL100V2, EL200V2, EL300)
+# The EL30 V2 shares that map except for the working mode. Register 2005 is
+# verified on the other portables, but an EL30 V2 owner saw it read 4 (time
+# control) while the app showed Standard, so that profile leaves it out
+# rather than offering a dropdown that could write the wrong mode to a UPS.
+EL30V2_ONLY_DIFFERENCE = ("ctrl_ups_mode", 2005, 1)
 
 
 def _layout(device_cls):
@@ -24,6 +29,13 @@ class TestEL300(unittest.TestCase):
             with self.subTest(device=device_cls.__name__):
                 self.assertEqual(_layout(device_cls), reference)
 
+    def test_el30v2_differs_only_by_the_working_mode(self):
+        reference = set(_layout(EL100V2))
+        el30v2 = set(_layout(EL30V2))
+
+        self.assertEqual(reference - el30v2, {EL30V2_ONLY_DIFFERENCE})
+        self.assertEqual(el30v2 - reference, set())
+
     def test_soc_range_and_ups_mode_use_the_v2_registers(self):
         device = EL300()
         addresses = {f.name: f.address for f in device.fields}
@@ -31,6 +43,7 @@ class TestEL300(unittest.TestCase):
         self.assertEqual(addresses["ctrl_grid_charge_on"], 2008)
         self.assertEqual(addresses["soc_range_start"], 2022)
         self.assertEqual(addresses["soc_range_end"], 2023)
+        self.assertEqual(addresses["ac_output_voltage"], 1431)
 
 
 if __name__ == "__main__":

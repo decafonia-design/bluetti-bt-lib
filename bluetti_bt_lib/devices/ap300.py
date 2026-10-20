@@ -25,7 +25,9 @@ class AP300(BaseDeviceV2):
                 UIntField(FieldName.AC_INPUT_POWER, 146),
                 DecimalField(FieldName.AC_INPUT_VOLTAGE, 1314, 1),
                 DecimalField(FieldName.AC_INPUT_CURRENT, 1315, 1),
-                DecimalField(FieldName.AC_OUTPUT_VOLTAGE, 1511, 1),
+                # 1511 mirrors the grid input on this family, the real AC
+                # output is 1431.
+                DecimalField(FieldName.AC_OUTPUT_VOLTAGE, 1431, 1),
                 # UPS working mode: V2 portables keep it at 2005 and use
                 # different values than the V1 UpsMode register (3001).
                 SelectField(FieldName.CTRL_UPS_MODE, 2005, WorkingModeV2),

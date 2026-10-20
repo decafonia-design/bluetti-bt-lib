@@ -24,7 +24,9 @@ class EL10(BaseDeviceV2):
                 UIntField(FieldName.AC_INPUT_POWER, 146),
                 DecimalField(FieldName.AC_INPUT_VOLTAGE, 1314, 1),
                 DecimalField(FieldName.AC_INPUT_CURRENT, 1315, 1),
-                DecimalField(FieldName.AC_OUTPUT_VOLTAGE, 1511, 1),
+                # 1511 mirrors the grid input on this family, the real AC
+                # output is 1431.
+                DecimalField(FieldName.AC_OUTPUT_VOLTAGE, 1431, 1),
                 SwitchField(FieldName.CTRL_AC, 2011),
                 SwitchField(FieldName.CTRL_DC, 2012),
                 SwitchField(FieldName.CTRL_ECO_DC, 2014),

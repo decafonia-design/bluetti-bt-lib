@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from ..enums import EcoMode, DisplayMode, ChargingMode, WorkingModeV2
+from ..enums import EcoMode, DisplayMode, ChargingMode
 from ..fields import (
     FieldName,
     UIntField,
@@ -25,10 +25,13 @@ class EL30V2(BaseDeviceV2):
                 UIntField(FieldName.AC_INPUT_POWER, 146),
                 DecimalField(FieldName.AC_INPUT_VOLTAGE, 1314, 1),
                 DecimalField(FieldName.AC_INPUT_CURRENT, 1315, 1),
-                DecimalField(FieldName.AC_OUTPUT_VOLTAGE, 1511, 1),
-                # UPS working mode: V2 portables keep it at 2005 and use
-                # different values than the V1 UpsMode register (3001).
-                SelectField(FieldName.CTRL_UPS_MODE, 2005, WorkingModeV2),
+                # 1511 mirrors the grid input on the V2 portables, the real AC
+                # output is 1431.
+                DecimalField(FieldName.AC_OUTPUT_VOLTAGE, 1431, 1),
+                # Working mode (2005) is left out: it is verified on the
+                # EL100 V2, but an EL30 V2 owner reported it reading 4
+                # (time control) while the app showed Standard, so offering it
+                # here could write the wrong mode to a UPS.
                 # UPS grid-charge enable; the AC300 exposes the same function
                 # as ctrl_grid_charge_on (register 3011 there).
                 SwitchField(FieldName.CTRL_GRID_CHARGE_ON, 2008),
