@@ -83,6 +83,8 @@ class DeviceReader:
         self.notify_future: asyncio.Future[Any] | None = None
         self.encryption = BluettiEncryption()
         self.encrypted_buffer = bytearray()
+        self.last_notification: bytes | None = None
+        """Raw bytes of the previous notification, used to drop repeats."""
         self.handshake_failed = False
         """Set when the key exchange cannot complete; only a reconnect fixes it."""
         self._connected = False
@@ -176,6 +178,7 @@ class DeviceReader:
         self._notified_client = None
         self.encryption.reset()
         self.encrypted_buffer.clear()
+        self.last_notification = None
 
         if self.ble_client is None and self.client and self.client.is_connected:
             try:
@@ -215,6 +218,7 @@ class DeviceReader:
 
         self.encryption.reset()
         self.encrypted_buffer.clear()
+        self.last_notification = None
 
     async def _await_handshake(self) -> bool:
         """Wait for the key exchange of a fresh connection to finish.
@@ -277,6 +281,7 @@ class DeviceReader:
 
         self.encryption.reset()
         self.encrypted_buffer.clear()
+        self.last_notification = None
 
     async def _resync_link(self) -> None:
         """Reset the notification pipeline without dropping the connection.
@@ -297,6 +302,7 @@ class DeviceReader:
         self.notify_response = bytearray()
         self.notify_future = None
         self.encrypted_buffer.clear()
+        self.last_notification = None
 
         if self.has_notifier and self.client:
             try:
@@ -332,6 +338,7 @@ class DeviceReader:
 
             self.encryption.reset()
             self.encrypted_buffer.clear()
+            self.last_notification = None
             self._connected = False
 
     @staticmethod
@@ -597,6 +604,8 @@ class DeviceReader:
         self.notify_response = bytearray()
         self.notify_future = self.create_future()
         self.encrypted_buffer.clear()
+        # Two identical answers to two different requests are legitimate.
+        self.last_notification = None
 
         command_bytes = bytes(registers)
 
@@ -684,6 +693,19 @@ class DeviceReader:
     async def _notification_handler(self, _: int, data: bytearray):
         """Handle bt data."""
         self.logger.debug("Got new data (%d bytes)", len(data))
+
+        # Some stations (the Apex 300 among them) deliver every frame two or
+        # three times, and retry the key exchange until they see our answer.
+        # Replying to a repeat makes a second local keypair, so the peer ends
+        # up sharing a secret with a key we threw away: the handshake is
+        # confirmed on both sides and the device then ignores every command.
+        # A half-assembled answer is exempt, because its next chunk has to be
+        # kept even when it looks exactly like the chunk before it.
+        notification = bytes(data)
+        if notification == self.last_notification and not self.notify_response:
+            self.logger.debug("Duplicate notification ignored")
+            return
+        self.last_notification = notification
 
         if self.config.use_encryption is True:
             message = Message(data)

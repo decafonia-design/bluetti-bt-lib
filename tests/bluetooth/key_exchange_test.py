@@ -1,14 +1,18 @@
 import asyncio
 import unittest
+from unittest import mock
 
 from bleak.exc import BleakError
+from cryptography.hazmat.primitives.asymmetric import ec
 
 from bluetti_bt_lib import DeviceReader
 from bluetti_bt_lib.base_devices import BaseDeviceV1
+from bluetti_bt_lib.bluetooth import encryption as encryption_mod
 from bluetti_bt_lib.bluetooth.device_reader import DeviceReaderConfig
 from bluetti_bt_lib.bluetooth.encryption import (
     BluettiEncryption,
     KEX_MAGIC,
+    Message,
     MessageType,
     hexsum,
 )
@@ -139,6 +143,48 @@ class TestKeyExchange(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(reader.handshake_failed)
 
 
+    async def test_repeated_frame_is_answered_once(self):
+        # Some stations deliver every frame two or three times. Answering a
+        # repeat twice is what leaves the peer sharing a secret with a key we
+        # threw away, after which it ignores every command.
+        reader = self.make_reader()
+        frame = plaintext_frame(
+            bytes([MessageType.CHALLENGE.value, 0]) + b"\x01\x02\x03\x04"
+        )
+
+        await reader._notification_handler(0, frame)
+        await reader._notification_handler(0, bytearray(frame))
+
+        self.assertEqual(len(reader.client.writes), 1)
+
+    async def test_identical_chunks_of_a_partial_answer_are_kept(self):
+        # A plain answer split over two notifications can have identical
+        # halves. Dropping the second would leave the read waiting forever.
+        reader = DeviceReader(
+            "00:11:00:11:00:11",
+            BaseDeviceV1(),
+            asyncio.Future,
+            config=DeviceReaderConfig(use_encryption=False),
+        )
+        reader.client = WriteCapturingClient()
+        chunk = bytearray(b"\x01\x03\x04\x00\x01\x00\x01")
+        reader.notify_response = bytearray(chunk)
+
+        await reader._notification_handler(0, bytearray(chunk))
+        await reader._notification_handler(0, bytearray(chunk))
+
+        self.assertEqual(len(reader.notify_response), 3 * len(chunk))
+
+    async def test_resync_forgets_the_last_frame(self):
+        # A later request can legitimately get the same answer byte for byte.
+        reader = self.make_reader()
+        reader.last_notification = b"\x01\x03\x02\x12\x34"
+
+        await reader._resync_link()
+
+        self.assertIsNone(reader.last_notification)
+
+
 class TestHandshakeAbandoned(unittest.IsolatedAsyncioTestCase):
     async def test_abandon_handshake_drops_a_supplied_client(self):
         # A link without a session can never carry a command, and the peer
@@ -177,6 +223,80 @@ class TestHandshakeAbandoned(unittest.IsolatedAsyncioTestCase):
         reader.handshake_failed = True
 
         self.assertFalse(await reader._await_handshake())
+
+
+class TestRepeatedPeerPubkey(unittest.TestCase):
+    """Stations retry their pubkey until they see our answer, and some deliver
+    every frame several times. Each repeat must not make a new keypair: the
+    peer shares a secret with whichever key it accepted, so a later keypair
+    leaves the two ends agreeing on different keys and the device stops
+    answering every command."""
+
+    @staticmethod
+    def peer_key() -> ec.EllipticCurvePublicKey:
+        return ec.generate_private_key(ec.SECP256R1()).public_key()
+
+    def run_exchange(self, peer_pubkeys: list):
+        encryption = BluettiEncryption()
+        encryption.unsecure_aes_key = bytes(16)
+        encryption.unsecure_aes_iv = bytes(16)
+
+        body = bytes([MessageType.PEER_PUBKEY.value, 0]) + bytes(64)
+        message = Message(KEX_MAGIC + body + hexsum(body, 2))
+
+        replies: list = []
+        keypairs: list = []
+
+        # The peer signs with a well-known key, so a genuinely signed frame
+        # cannot be forged here; only the pubkey extraction is stood in for.
+        with mock.patch.object(
+            encryption_mod, "verify_and_extract_signed_data", return_value=bytes(64)
+        ), mock.patch.object(
+            encryption_mod, "pubkey_from_bytes", side_effect=peer_pubkeys
+        ):
+            for _ in peer_pubkeys:
+                replies.append(encryption.msg_peer_pubkey(message))
+                keypairs.append(encryption.my_pubkey)
+
+        return replies, keypairs, encryption
+
+    @staticmethod
+    def plaintext(encryption: BluettiEncryption, reply: bytes) -> bytes:
+        return encryption.aes_decrypt(
+            reply, encryption.unsecure_aes_key, encryption.unsecure_aes_iv
+        )
+
+    def test_repeat_keeps_the_local_keypair(self):
+        peer = self.peer_key()
+        replies, keypairs, encryption = self.run_exchange([peer, peer, peer])
+
+        self.assertIs(keypairs[0], keypairs[1])
+        self.assertIs(keypairs[1], keypairs[2])
+
+        # The signature is randomized, so only the pubkey the station accepts
+        # has to be the same in every reply.
+        my_pubkey_bytes = encryption_mod.pubkey_to_bytes(keypairs[0])
+        for reply in replies:
+            self.assertIn(my_pubkey_bytes, self.plaintext(encryption, reply))
+
+    def test_new_peer_pubkey_makes_a_new_keypair(self):
+        replies, keypairs, encryption = self.run_exchange(
+            [self.peer_key(), self.peer_key()]
+        )
+
+        self.assertIsNot(keypairs[0], keypairs[1])
+        self.assertNotIn(
+            encryption_mod.pubkey_to_bytes(keypairs[0]),
+            self.plaintext(encryption, replies[1]),
+        )
+
+    def test_confirmation_without_a_keypair_is_rejected(self):
+        encryption = BluettiEncryption()
+        body = bytes([MessageType.PUBKEY_ACCEPTED.value, 0, 0])
+        message = Message(KEX_MAGIC + body + hexsum(body, 2))
+
+        with self.assertRaises(ValueError):
+            encryption.msg_key_accepted(message)
 
 
 class TestEncryptionReset(unittest.TestCase):
