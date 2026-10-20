@@ -44,11 +44,12 @@ def _select_verification_delay(field_obj, is_shared_control: bool) -> float:
     settings such as the AC300 SOC range thresholds, and the 2s delay
     SelectField carries by default); otherwise Charger 2 shared controls use
     the extended delay and everything else the short default. The short
-    default leaves room for a device that is busy serving other polls.
+    default still gives the station time to settle: reading back too soon has
+    been seen to return the response belonging to a different request.
     """
     if field_obj is not None and field_obj.verification_delay is not None:
         return field_obj.verification_delay
-    return 2.0 if is_shared_control else 0.7
+    return 2.0 if is_shared_control else 1.0
 
 
 class DeviceWriter:
