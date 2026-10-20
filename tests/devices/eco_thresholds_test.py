@@ -27,8 +27,8 @@ APP_VERIFIED = {
 # that could write a value the station ignores.
 READ_ONLY = (EL200V2, EL300, EL30V2, AC70, AC180)
 
-# The apps move the thresholds in 5 W steps.
-STEP = 5
+# The registers hold whole watts, so the sliders move in 1 W steps.
+STEP = 1
 
 
 class TestEcoThresholds(unittest.TestCase):

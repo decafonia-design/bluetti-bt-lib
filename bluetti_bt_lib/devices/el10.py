@@ -34,10 +34,10 @@ class EL10(BaseDeviceV2):
                 SelectField(FieldName.CTRL_ECO_TIME_MODE_DC, 2015, EcoMode),
                 # The EL10 app ranges the eco auto-off thresholds tighter than
                 # the bigger portables: 5-10 W on DC and 15-30 W on AC.
-                NumberField(FieldName.CTRL_ECO_MIN_POWER_DC, 2016, 1, 5, 10, 5),
+                NumberField(FieldName.CTRL_ECO_MIN_POWER_DC, 2016, 1, 5, 10, 1),
                 SwitchField(FieldName.CTRL_ECO_AC, 2017),
                 SelectField(FieldName.CTRL_ECO_TIME_MODE_AC, 2018, EcoMode),
-                NumberField(FieldName.CTRL_ECO_MIN_POWER_AC, 2019, 1, 15, 30, 5),
+                NumberField(FieldName.CTRL_ECO_MIN_POWER_AC, 2019, 1, 15, 30, 1),
                 SelectField(FieldName.CTRL_CHARGING_MODE, 2020, ChargingMode),
                 SwitchField(FieldName.CTRL_POWER_LIFTING, 2021),
                 SelectField(FieldName.CTRL_DISPLAY_TIMEOUT, 2067, DisplayMode),

@@ -10,11 +10,10 @@ class NumberField(UIntField):
     settings such as the AC300 SOC charge range (registers 3015/3016)
     can be exposed as adjustable numbers rather than read-only sensors.
 
-    ``step`` is the increment the device is normally driven in (e.g. 5 for
-    a 0-100 range in 5% steps). It is exposed so clients such as Home
-    Assistant can build matching number entities. It is a presentation
-    hint only: these devices accept 1% increments, so off-step values are
-    still written rather than rejected.
+    ``step`` is the increment the device is normally driven in. It is exposed
+    so clients such as Home Assistant can build matching number entities. It
+    is a presentation hint only: these registers accept whole units, so
+    off-step values are still written rather than rejected.
     """
 
     def __init__(

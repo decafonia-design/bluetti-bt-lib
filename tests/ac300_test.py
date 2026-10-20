@@ -47,8 +47,8 @@ class TestAC300(unittest.TestCase):
         self.assertIsInstance(end, NumberField)
         self.assertTrue(start.is_writeable())
         self.assertTrue(end.is_writeable())
-        self.assertEqual(start.step, 5)
-        self.assertEqual(end.step, 5)
+        self.assertEqual(start.step, 1)
+        self.assertEqual(end.step, 1)
 
         self.assertEqual(self.device.build_write_command("soc_range_start", 30).value, 30)
         self.assertEqual(self.device.build_write_command("soc_range_end", 90).value, 90)
