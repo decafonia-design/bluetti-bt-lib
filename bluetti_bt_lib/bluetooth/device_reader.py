@@ -19,6 +19,22 @@ from ..utils.privacy import mac_loggable
 # registers hold the data of the newly selected pack.
 PACK_SELECTOR_SETTLE_SECONDS = 3
 
+# How long a single request waits for its answer.
+RESPONSE_TIMEOUT_SECONDS = 5
+
+
+class ResponseTimeout(Exception):
+    """No valid answer to a request arrived in time.
+
+    The link is left in an unknown state: an answer may still be on its way and
+    would otherwise be taken for the next request, so the caller must stop using
+    this connection instead of sending another command.
+    """
+
+    def __init__(self, registers: DeviceRegister):
+        super().__init__(f"no valid response to {registers}")
+        self.registers = registers
+
 
 class DeviceReaderConfig:
     def __init__(self, timeout: int = 60, use_encryption: bool = False):
@@ -190,6 +206,36 @@ class DeviceReader:
 
         self.encryption.reset()
         self.encrypted_buffer.clear()
+
+    async def _resync_link(self) -> None:
+        """Reset the notification pipeline without dropping the connection.
+
+        A request that got no valid answer leaves the link desynced: an answer
+        may still be on its way and would otherwise be handed to the next
+        request. Unsubscribing discards whatever is in flight, and clearing the
+        subscription flags makes the next connect() subscribe again.
+
+        Unlike _mark_disconnected() this keeps the encryption session: the
+        device only restarts a handshake when the connection itself drops, so
+        resetting the session over a live link would wedge the device. The
+        connection is not ours to drop either when a client was supplied.
+        """
+        self.logger.debug("Resyncing the notification pipeline")
+
+        self.current_registers = None
+        self.notify_response = bytearray()
+        self.notify_future = None
+        self.encrypted_buffer.clear()
+
+        if self.has_notifier and self.client:
+            try:
+                await self.client.stop_notify(NOTIFY_UUID)
+            except Exception:
+                pass
+            self.has_notifier = False
+            self._notified_client = None
+
+        self._connected = False
 
     async def disconnect(self):
         """Clean up the reader's notification and connection state."""
@@ -363,6 +409,14 @@ class DeviceReader:
                             slot_limit,
                         )
 
+            except ResponseTimeout as err:
+                # Stop here rather than sending more commands: the answer to
+                # this request may still arrive and would be read as the answer
+                # to the next one, which is how a register ends up holding the
+                # value of a different register.
+                self.logger.warning("Read aborted: %s", err)
+                await self._resync_link()
+                return None
             except TimeoutError:
                 self.logger.warning("Timeout")
                 return None
@@ -421,6 +475,13 @@ class DeviceReader:
                             )
                         )
 
+        except ResponseTimeout as err:
+            # Same reasoning as read(): a write verification read-back that
+            # gets no valid answer must not be followed by another command on
+            # a link that may still be carrying a late answer.
+            self.logger.warning("Read aborted: %s", err)
+            await self._resync_link()
+            return None
         except TimeoutError:
             self.logger.warning("Timeout reading selected registers")
             return None
@@ -440,7 +501,13 @@ class DeviceReader:
         return parsed_data or None
 
     async def _async_send_command(self, registers: DeviceRegister) -> bytes:
-        """Send command and return response"""
+        """Send a command and return its validated response.
+
+        Raises ResponseTimeout when no valid answer arrives in time; the caller
+        must then stop using this connection. A MODBUS exception answer (for
+        example a register range the device does not support) returns an empty
+        response.
+        """
         self.current_registers = registers
         self.notify_response = bytearray()
         self.notify_future = self.create_future()
@@ -463,7 +530,9 @@ class DeviceReader:
             self.logger.debug("Request sent (%s)", registers)
 
             # Wait for response
-            res = await asyncio.wait_for(self.notify_future, timeout=5)
+            res = await asyncio.wait_for(
+                self.notify_future, timeout=RESPONSE_TIMEOUT_SECONDS
+            )
 
             self.logger.debug("Got response (%d bytes)", len(res))
 
@@ -476,20 +545,21 @@ class DeviceReader:
             # leave _connected stuck at True forever.
             raise
         except asyncio.TimeoutError:
-            # The GATT link can still look healthy when the device skips
-            # a response: log enough context to tell a dead connection
-            # from a single missed notification. Recovery policy (e.g. a
-            # consecutive-timeout threshold) is deliberately not applied
-            # here yet.
-            self.logger.debug(
-                "No notification for %s within 5s (client connected: %s)",
+            # No valid answer to this request. The GATT link can still look
+            # healthy while the device skipped a response, but the answer may
+            # also still be on its way: keep going would hand that answer to
+            # the next request, which is how a register ends up holding the
+            # value of a different one. Abort the read instead.
+            self.logger.warning(
+                "No valid response to %s within %ss (client connected: %s)",
                 registers,
+                RESPONSE_TIMEOUT_SECONDS,
                 self.client.is_connected if self.client else False,
             )
-        except Exception:
-            self.logger.warning("Error while reading data", exc_info=True)
-
-        return bytes()
+            raise ResponseTimeout(registers) from None
+        finally:
+            # Answers that arrive from now on are not for a pending request.
+            self.notify_future = None
 
     def _calculate_expected_encrypted_length(self, buffer: bytearray) -> int | None:
         """Calculate expected total length of an encrypted message."""
@@ -600,4 +670,43 @@ class DeviceReader:
             )
             return
 
-        self.notify_future.set_result(self.notify_response)
+        registers = self.current_registers
+        if registers is None:
+            return
+
+        response = bytes(self.notify_response)
+
+        if registers.is_valid_exception(response):
+            # A register range this device does not answer. Replying with
+            # nothing keeps those fields out of the result instead of failing
+            # the whole poll.
+            self.logger.debug(
+                "Exception response to %s: %s", registers, response.hex()
+            )
+            self.notify_future.set_result(bytes())
+            return
+
+        size = registers.response_size()
+        if len(response) < size:
+            self.logger.debug(
+                "Partial answer (%d/%d bytes), waiting for the rest",
+                len(response),
+                size,
+            )
+            return
+
+        if len(response) == size and registers.is_valid_response(response):
+            self.notify_future.set_result(response)
+            return
+
+        # Not the answer to this request: a late answer to an earlier one, a
+        # write acknowledgement, or a corrupted frame. A function 03 answer
+        # carries no register address, so length plus byte count is the only
+        # thing to go on. Discard it and keep waiting; if no valid answer
+        # follows, the request times out and the read is aborted.
+        self.logger.debug(
+            "Discarding response that does not match %s: %s",
+            registers,
+            response.hex(),
+        )
+        self.notify_response = bytearray()
