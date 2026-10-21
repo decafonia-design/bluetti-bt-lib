@@ -43,6 +43,19 @@ class SlotAwareMock(ClientMockNoEncryption):
         return super()._get_register(starting_address, size)
 
 
+class CountingSlotMock(SlotAwareMock):
+    """Records one entry per pass over the pack registers of a slot."""
+
+    def __init__(self, packs: dict[int, tuple[int, int]]) -> None:
+        super().__init__(packs)
+        self.pack_reads: list[int] = []
+
+    def _get_register(self, starting_address: int, size: int) -> bytes:
+        if starting_address == PACK_VOLTAGE_REGISTER:
+            self.pack_reads.append(self._slot)
+        return super()._get_register(starting_address, size)
+
+
 async def _read(device, ble_mock, raw: bool = False):
     reader = DeviceReader(
         "00:11:00:11:00:11",
@@ -185,6 +198,48 @@ class TestPackPolling(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("pack_6_battery_soc", data)
         self.assertNotIn("pack_3_voltage", data)
         self.assertNotIn("pack_6_voltage", data)
+
+
+class TestPackSettle(unittest.IsolatedAsyncioTestCase):
+    """The settle wait is paid in full only by slots that answer with nothing."""
+
+    async def _read(self, device: BaseDeviceV1, packs: dict, pack_num: int):
+        ble_mock = CountingSlotMock(packs)
+        ble_mock.add_r_int(96, pack_num)
+
+        reader = DeviceReader(
+            "00:11:00:11:00:11", device, asyncio.Future, ble_client=ble_mock
+        )
+
+        slept: list[float] = []
+
+        async def record_sleep(seconds):
+            slept.append(seconds)
+
+        with patch("asyncio.sleep", record_sleep):
+            data = await reader.read()
+
+        return data, ble_mock, slept
+
+    async def test_loaded_slot_only_pays_the_early_look(self):
+        _, ble_mock, slept = await self._read(
+            AC300(), {1: (5120, 80), 2: (5110, 70)}, pack_num=2
+        )
+
+        # One short wait per slot, and the pack registers are read once each.
+        self.assertEqual(slept, [1, 1])
+        self.assertEqual(ble_mock.pack_reads, [1, 2])
+
+    async def test_empty_slot_waits_out_the_settle(self):
+        data, ble_mock, slept = await self._read(
+            AC300(), {2: (5120, 80)}, pack_num=1
+        )
+
+        # Slot 1 answers nothing, so it waits the rest of the settle and reads
+        # again. Slot 2 is loaded and only pays the early look.
+        self.assertEqual(slept, [1, 2, 1])
+        self.assertEqual(ble_mock.pack_reads, [1, 1, 2])
+        self.assertEqual(data.get("pack_slots"), [2])
 
 
 if __name__ == "__main__":

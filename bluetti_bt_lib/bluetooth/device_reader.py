@@ -20,6 +20,12 @@ from ..utils.privacy import mac_loggable
 # registers hold the data of the newly selected pack.
 PACK_SELECTOR_SETTLE_SECONDS = 3
 
+# A slot that holds a pack usually answers long before that wait is over, while
+# an empty slot needs all of it. Take an early look and only wait out the
+# remainder for a slot that came back empty, so a station with packs in most
+# of its slots does not pay the full settle on every one.
+PACK_SELECTOR_EARLY_LOOK_SECONDS = 1
+
 # How long a single request waits for its answer.
 RESPONSE_TIMEOUT_SECONDS = 5
 
@@ -341,6 +347,32 @@ class DeviceReader:
             self.last_notification = None
             self._connected = False
 
+    async def _read_pack(
+        self, pack: int, pack_registers: List[ReadableRegisters], raw: bool
+    ) -> dict:
+        """Read the pack registers of the slot the selector points at."""
+        pack_data: dict = {}
+
+        for register in pack_registers:
+            body = register.parse_response(await self._async_send_command(register))
+
+            self.logger.debug("Raw data: %s", body)
+
+            if raw:
+                pack_data[register.starting_address] = body
+                continue
+
+            parsed = self.bluetti_device.parse(
+                register.starting_address,
+                body,
+                pack_num=pack,
+            )
+
+            self.logger.debug("Parsed data: %s", parsed)
+            pack_data.update(parsed)
+
+        return pack_data
+
     @staticmethod
     def _pack_has_data(pack_data: dict) -> bool:
         """Whether a pack slot is actually occupied.
@@ -445,31 +477,23 @@ class DeviceReader:
                             )
                         )
 
-                        # We need to wait for the powerstation to populate all registers
-                        await asyncio.sleep(PACK_SELECTOR_SETTLE_SECONDS)
+                        # We need to wait for the powerstation to populate all
+                        # registers, but a loaded slot is usually ready before
+                        # that wait is over: look early, and only wait out the
+                        # remainder for a slot that came back empty.
+                        early_look = min(
+                            PACK_SELECTOR_EARLY_LOOK_SECONDS,
+                            PACK_SELECTOR_SETTLE_SECONDS,
+                        )
+                        await asyncio.sleep(early_look)
 
-                        pack_data: dict = {}
+                        pack_data = await self._read_pack(pack, pack_registers, raw)
 
-                        for register in pack_registers:
-                            body = register.parse_response(
-                                await self._async_send_command(register)
+                        if not raw and not self._pack_has_data(pack_data):
+                            await asyncio.sleep(
+                                PACK_SELECTOR_SETTLE_SECONDS - early_look
                             )
-
-                            self.logger.debug("Raw data: %s", body)
-
-                            if raw:
-                                pack_data[register.starting_address] = body
-                                continue
-
-                            parsed = self.bluetti_device.parse(
-                                register.starting_address,
-                                body,
-                                pack_num=pack,
-                            )
-
-                            self.logger.debug("Parsed data: %s", parsed)
-
-                            pack_data.update(parsed)
+                            pack_data = await self._read_pack(pack, pack_registers, raw)
 
                         if raw or self._pack_has_data(pack_data):
                             parsed_data.update(pack_data)
