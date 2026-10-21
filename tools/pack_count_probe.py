@@ -18,14 +18,21 @@ Run with the pipx venv python:
   ~/.local/share/pipx/venvs/bluetti-bt-lib-sidieje/bin/python pack-count-probe.py -m <MAC> -t AC300
 Add --enc for the encrypted stations (Elite V2 models, AP300, EL10, Charger 2).
 Use --no-walk to read the registers without touching 3006 at all.
+Use --reset N to write N into the selector after the walk and read the
+registers again: it shows whether the count follows a later write, or whether
+the station only remembers the highest slot it was ever given.
+
+Each round also prints the selector writes the reader actually sent, so a run
+says whether the walk restored the selector rather than assuming it did.
 """
 
 import argparse
 import asyncio
 
+import bluetti_bt_lib
 from bluetti_bt_lib.bluetooth.device_reader import DeviceReader, DeviceReaderConfig
 from bluetti_bt_lib.fields import FieldName
-from bluetti_bt_lib.registers import ReadableRegisters
+from bluetti_bt_lib.registers import ReadableRegisters, WriteableRegister
 from bluetti_bt_lib.utils.device_builder import build_device
 
 PACK_COUNT_REGISTER = 96
@@ -84,6 +91,12 @@ async def main() -> None:
         action="store_true",
         help="only read the registers; never write the pack selector",
     )
+    parser.add_argument(
+        "--reset",
+        type=int,
+        metavar="N",
+        help="after the walk, write N to the selector and read the registers again",
+    )
     args = parser.parse_args()
 
     device = build_device(args.type + "12345678")
@@ -102,6 +115,24 @@ async def main() -> None:
         f"{args.type}: max_packs={device.max_packs}, "
         f"selector writes {[pack for pack in range(1, device.max_packs + 1)]}"
     )
+    # Which copy of the library is under test, so a run can be read as evidence
+    # about a particular build.
+    print(f"library: {bluetti_bt_lib.__file__}")
+
+    # Record every write to the selector register, whoever sends it. This is how
+    # a run shows whether the reader put the selector back after walking.
+    selector_writes: list[int] = []
+    send_command = reader._async_send_command
+
+    async def recording_send(registers):
+        if (
+            isinstance(registers, WriteableRegister)
+            and registers.address == SELECTOR_REGISTER
+        ):
+            selector_writes.append(registers.value)
+        return await send_command(registers)
+
+    reader._async_send_command = recording_send
 
     for round_number in range(1, args.rounds + 1):
         print(f"[{round_number}]")
@@ -122,6 +153,9 @@ async def main() -> None:
                 reported = data.get(FieldName.PACK_NUM.value)
                 print(f"    walk: reg96 as parsed={reported}  slots={slots}")
 
+            print(f"    selector writes: {selector_writes}")
+            selector_writes.clear()
+
             after = await read_raw(reader, "after walk")
 
             if before and after:
@@ -134,6 +168,21 @@ async def main() -> None:
                         f"    >>> register {PACK_COUNT_REGISTER} moved "
                         f"{first} -> {second} across the walk"
                     )
+
+            if args.reset is not None:
+                # Does the count follow a later write, or only the highest slot
+                # ever written? If it follows, an inflated count can be put
+                # right afterwards. If it does not, the walk has to be bounded
+                # instead of repaired.
+                await reader._async_send_command(
+                    WriteableRegister(SELECTOR_REGISTER, args.reset)
+                )
+                await asyncio.sleep(1)
+                await read_raw(
+                    reader, f"after writing {args.reset} to {SELECTOR_REGISTER}"
+                )
+                print(f"    selector writes: {selector_writes}")
+                selector_writes.clear()
         else:
             await read_raw(reader, "no walk")
 
