@@ -94,6 +94,10 @@ class DeviceReader:
         self.handshake_failed = False
         """Set when the key exchange cannot complete; only a reconnect fixes it."""
         self._connected = False
+        self._answered = False
+        """Whether this connection has answered a request yet. A station that
+        is still waking tends to miss the first one, so that miss is logged
+        quietly; after the link has proven itself a missing answer is news."""
 
     async def connect(self) -> bool:
         """Establish a persistent connection to the device.
@@ -151,6 +155,7 @@ class DeviceReader:
                     return False
 
             self._connected = True
+            self._answered = False
             return True
 
         except BleakError as err:
@@ -534,7 +539,7 @@ class DeviceReader:
                 # this request may still arrive and would be read as the answer
                 # to the next one, which is how a register ends up holding the
                 # value of a different register.
-                self.logger.warning("Read aborted: %s", err)
+                self._log_timeout("Read aborted: %s", err)
                 await self._resync_link()
                 return None
             except TimeoutError:
@@ -605,7 +610,7 @@ class DeviceReader:
             # Same reasoning as read(): a write verification read-back that
             # gets no valid answer must not be followed by another command on
             # a link that may still be carrying a late answer.
-            self.logger.warning("Read aborted: %s", err)
+            self._log_timeout("Read aborted: %s", err)
             await self._resync_link()
             return None
         except TimeoutError:
@@ -625,6 +630,17 @@ class DeviceReader:
             return None
 
         return parsed_data or None
+
+    def _log_timeout(self, message: str, *args: Any) -> None:
+        """Report a request that went unanswered.
+
+        The first request on a fresh connection is the one a waking station
+        tends to miss, which is normal and not worth a warning. Once the
+        connection has been answering, a missing answer is news.
+        """
+        self.logger.log(
+            logging.WARNING if self._answered else logging.DEBUG, message, *args
+        )
 
     async def _async_send_command(self, registers: DeviceRegister) -> bytes:
         """Send a command and return its validated response.
@@ -664,6 +680,8 @@ class DeviceReader:
 
             self.logger.debug("Got response (%d bytes)", len(res))
 
+            self._answered = True
+
             return cast(bytes, res)
         except BleakError:
             # A failed GATT write/notify almost always means the
@@ -678,7 +696,7 @@ class DeviceReader:
             # also still be on its way: keep going would hand that answer to
             # the next request, which is how a register ends up holding the
             # value of a different one. Abort the read instead.
-            self.logger.warning(
+            self._log_timeout(
                 "No valid response to %s within %ss (client connected: %s)",
                 registers,
                 RESPONSE_TIMEOUT_SECONDS,
