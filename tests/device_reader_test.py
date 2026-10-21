@@ -1,4 +1,5 @@
 import asyncio
+import struct
 import unittest
 
 from bleak.exc import BleakError
@@ -11,9 +12,24 @@ from bluetti_bt_lib.registers import ReadableRegisters
 from bluetti_bt_lib.utils.bleak_client_mock import ClientMockNoEncryption
 
 
+class RequestRecordingMock(ClientMockNoEncryption):
+    """Mock that also records which registers each request asked for."""
+
+    def __init__(self):
+        super().__init__()
+        self.reads: list[tuple[int, int]] = []
+
+    async def write_gatt_char(self, char_specifier, data, response=None):
+        command = bytes(data)
+        if len(command) >= 4 and command[1] == 3:
+            self.reads.append(struct.unpack_from("!HH", command, 2))
+
+        await super().write_gatt_char(char_specifier, data, response)
+
+
 class TestDeviceReader(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
-        self.ble_mock = ClientMockNoEncryption()
+        self.ble_mock = RequestRecordingMock()
 
         # Device type
         self.ble_mock.add_r_str(10, "AC300", 6)
@@ -200,3 +216,59 @@ class TestDeviceReader(unittest.IsolatedAsyncioTestCase):
             await task
 
         self.assertFalse(reader._connected)
+
+    def build_reader(self, device=None) -> DeviceReader:
+        return DeviceReader(
+            "00:11:00:11:00:11",
+            device or BaseDeviceV1(),
+            asyncio.Future,
+            ble_client=self.ble_mock,
+            lock=asyncio.Lock(),
+        )
+
+    async def test_infrequent_fields_are_asked_for_once(self):
+        # The identity registers describe the station rather than what it is
+        # doing, so a cycle stops asking for them once this connection has
+        # answered, while the values keep being reported.
+        reader = self.build_reader()
+
+        first = await reader.read()
+        self.assertEqual(first.get(FieldName.DEVICE_TYPE.value), "AC300")
+        self.assertIn((10, 6), self.ble_mock.reads)
+        self.assertIn((17, 4), self.ble_mock.reads)
+
+        self.ble_mock.reads.clear()
+
+        second = await reader.read()
+        self.assertEqual(second.get(FieldName.DEVICE_TYPE.value), "AC300")
+        self.assertEqual(second.get(FieldName.DEVICE_SN.value), 2300000000000)
+        self.assertEqual(second.get(FieldName.BATTERY_SOC.value), 78)
+        self.assertNotIn((10, 6), self.ble_mock.reads)
+        self.assertNotIn((17, 4), self.ble_mock.reads)
+
+    async def test_infrequent_fields_are_asked_again_after_disconnect(self):
+        # The cached answers belong to the connection that produced them. A
+        # station that was renamed or reflashed while we were away has to be
+        # asked again.
+        reader = self.build_reader()
+
+        await reader.read()
+        self.ble_mock.reads.clear()
+
+        await reader.disconnect()
+        await reader.read()
+
+        self.assertIn((10, 6), self.ble_mock.reads)
+        self.assertIn((17, 4), self.ble_mock.reads)
+
+    async def test_live_fields_are_still_asked_for_every_cycle(self):
+        # The saving must not reach past the infrequent fields.
+        reader = self.build_reader()
+
+        await reader.read()
+        self.ble_mock.reads.clear()
+
+        await reader.read()
+
+        self.assertTrue(self.ble_mock.reads)
+        self.assertIn((36, 8), self.ble_mock.reads)

@@ -1,14 +1,19 @@
 import asyncio
+import struct
 import time
 import unittest
+from enum import Enum
+from types import SimpleNamespace
 
 from bleak.exc import BleakError
 
+from bluetti_bt_lib.base_devices import BluettiDevice
 from bluetti_bt_lib.bluetooth import DeviceWriter, DeviceWriterConfig
+from bluetti_bt_lib.bluetooth.device_reader import DeviceReader, DeviceReaderConfig
 from bluetti_bt_lib.bluetooth.device_writer import _select_verification_delay
 from bluetti_bt_lib.bluetooth.encryption import BluettiEncryption
 from bluetti_bt_lib.devices.ac180 import AC180
-from bluetti_bt_lib.fields import FieldName, NumberField, UIntField
+from bluetti_bt_lib.fields import FieldName, NumberField, SelectField, UIntField
 from bluetti_bt_lib.utils.bleak_client_mock import ClientMockNoEncryption
 
 NOTIFY_UUID = "0000ffe1-0000-1000-8000-00805f9b34fb"
@@ -183,3 +188,120 @@ class TestDeviceWriter(unittest.IsolatedAsyncioTestCase):
         # the notifier for the new connection lifecycle.
         self.assertFalse(writer._owns_notifier)
         self.assertFalse(writer.has_notifier)
+
+
+class DummyMode(Enum):
+    OFF = 0
+    ECO = 1
+    ON = 2
+
+
+class TestVerifiedSelectWrite(unittest.IsolatedAsyncioTestCase):
+    """A select write has to be checked against what the field parses back."""
+
+    async def asyncSetUp(self):
+        self.client = ClientMockNoEncryption()
+        self.original_write = self.client.write_gatt_char
+        self.device = BluettiDevice(
+            fields=[
+                SelectField(
+                    FieldName.CTRL_AC, 150, DummyMode, verification_delay=0.05
+                )
+            ]
+        )
+        self.lock = asyncio.Lock()
+
+        self.reader = DeviceReader(
+            mac=self.client.address,
+            bluetti_device=self.device,
+            future_builder_method=asyncio.get_running_loop().create_future,
+            config=DeviceReaderConfig(timeout=10),
+            lock=self.lock,
+            ble_client=self.client,
+        )
+        self.writer = DeviceWriter(
+            self.client,
+            self.device,
+            DeviceWriterConfig(timeout=10),
+            self.lock,
+            reader=self.reader,
+        )
+
+        async def apply_write(char_specifier, data, response=None):
+            command = bytes(data)
+            if len(command) >= 4 and command[1] == 6:
+                # The station applies the write to the register.
+                address, value = struct.unpack_from("!HH", command, 2)
+                self.client.add_r_int(address, value)
+                return
+
+            await self.original_write(char_specifier, data, response)
+
+        self.client.write_gatt_char = apply_write
+
+    async def asyncTearDown(self):
+        await self.reader.disconnect()
+
+    async def test_option_name_is_checked_against_the_parsed_option(self):
+        # Home Assistant hands over the option name while the read-back parses
+        # to the Enum member. Comparing the two as they were made every
+        # verified select write look like it had not taken effect.
+        result = await self.writer.write_verified(FieldName.CTRL_AC.value, "ECO")
+
+        self.assertTrue(result.write_succeeded)
+        self.assertTrue(result.readback_succeeded)
+        self.assertTrue(result.verified)
+        self.assertEqual(result.values[FieldName.CTRL_AC.value], DummyMode.ECO)
+
+    async def test_option_member_and_number_are_checked_too(self):
+        member = await self.writer.write_verified(
+            FieldName.CTRL_AC.value, DummyMode.ON
+        )
+        self.assertTrue(member.verified)
+        self.assertEqual(member.values[FieldName.CTRL_AC.value], DummyMode.ON)
+
+        number = await self.writer.write_verified(FieldName.CTRL_AC.value, 0)
+        self.assertTrue(number.verified)
+        self.assertEqual(number.values[FieldName.CTRL_AC.value], DummyMode.OFF)
+
+    async def test_a_write_the_station_ignored_is_not_verified(self):
+        # The station answers the write but leaves the register alone, so the
+        # read-back really does disagree and verification has to say so.
+        self.client.write_gatt_char = self.original_write
+
+        result = await self.writer.write_verified(FieldName.CTRL_AC.value, "ECO")
+
+        self.assertFalse(result.verified)
+
+    async def test_an_option_the_field_cannot_hold_is_rejected(self):
+        result = await self.writer.write_verified(FieldName.CTRL_AC.value, "NOPE")
+
+        self.assertFalse(result.write_succeeded)
+        self.assertFalse(result.verified)
+
+
+class TestEncryptionReadyWait(unittest.IsolatedAsyncioTestCase):
+    async def test_verified_write_does_not_wait_out_the_whole_budget(self):
+        # A session that never becomes ready used to hold the polling lock
+        # until the entire write timed out, leaving the caller with a bare
+        # timeout and no explanation of why nothing was sent.
+        client = ClientMockNoEncryption()
+        writer = DeviceWriter(
+            client,
+            AC180(),
+            DeviceWriterConfig(timeout=4, use_encryption=True),
+            asyncio.Lock(),
+            reader=SimpleNamespace(encryption=BluettiEncryption()),
+        )
+        writer.attach()
+
+        start = time.monotonic()
+        result = await writer.write_verified(FieldName.CTRL_AC.value, True)
+        elapsed = time.monotonic() - start
+
+        self.assertFalse(result.write_succeeded)
+        self.assertFalse(result.verified)
+        # The wait gives up inside its share of the budget rather than
+        # running the whole timeout.
+        self.assertGreater(elapsed, 0.5)
+        self.assertLess(elapsed, 3.5)

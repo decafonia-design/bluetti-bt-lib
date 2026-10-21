@@ -1,7 +1,7 @@
 from typing import Any, List
 
 from ..registers import ReadableRegisters, WriteableRegister
-from ..fields import DeviceField, BoolField, BoolFieldNonZero, SwitchField, SelectField, NumberField
+from ..fields import DeviceField, BoolField, BoolFieldNonZero, SwitchField, SelectField, NumberField, FieldName
 
 # Asking for one field at a time costs a radio round trip each, and a station
 # with 28 of them spends most of a poll cycle waiting for answers. Fields that
@@ -15,6 +15,30 @@ from ..fields import DeviceField, BoolField, BoolFieldNonZero, SwitchField, Sele
 # BluettiDevice.__init__.
 MAX_POLL_BLOCK = 10
 MAX_POLL_GAP = 4
+
+# Other fields describe the station rather than what it is doing: its identity,
+# its firmware, and the Wi-Fi name it was last told to use. Those only change
+# when someone intervenes, so asking for them every cycle is traffic that
+# answers a question nobody asked. The reader asks for each one once per
+# connection and reports the cached value afterwards; see DeviceReader.
+#
+# Keyed by field name, like the field categories below, so every device that
+# declares one of these gets the saving for free. DeviceField.name holds the
+# string, not the enum member.
+#
+# Write verification is not affected: the writer reads back the field it wrote
+# through an explicit register list, so a field that is not polled is still
+# checked after a write. Battery pack firmware (PACK_VER_*) is deliberately
+# absent: those registers sit in the pack bank, which is walked separately, and
+# a pack can be swapped while the station stays connected.
+STARTUP_FIELDS = {
+    FieldName.WIFI_NAME.value,
+    FieldName.VER_BMS.value,
+    FieldName.VER_ARM.value,
+    FieldName.VER_DSP.value,
+    FieldName.DEVICE_TYPE.value,
+    FieldName.DEVICE_SN.value,
+}
 
 
 def _polling_blocks(fields: List[DeviceField]) -> List[ReadableRegisters]:
@@ -55,7 +79,23 @@ class BluettiDevice:
         self.fields.sort(key=lambda f: f.address)
         self.pack_fields.sort(key=lambda f: f.address)
 
-        self.polling_registers: List[ReadableRegisters] = _polling_blocks(self.fields)
+        # Split the fields into what is worth asking for every cycle and what
+        # only has to be answered once. parse() still walks the whole field
+        # list, so a startup block that happens to cover a live register
+        # reports that register too.
+        self.startup_fields: List[DeviceField] = [
+            f for f in self.fields if f.name in STARTUP_FIELDS
+        ]
+        self.polling_fields: List[DeviceField] = [
+            f for f in self.fields if f.name not in STARTUP_FIELDS
+        ]
+
+        self.polling_registers: List[ReadableRegisters] = _polling_blocks(
+            self.polling_fields
+        )
+        self.startup_registers: List[ReadableRegisters] = _polling_blocks(
+            self.startup_fields
+        )
         self.pack_polling_registers: List[ReadableRegisters] = []
 
         # Check if we even have battery pack fields defined
@@ -72,6 +112,18 @@ class BluettiDevice:
     def get_polling_registers(self) -> List[ReadableRegisters]:
         """Returns all registers required to poll device fields"""
         return self.polling_registers
+
+    def get_startup_registers(self) -> List[ReadableRegisters]:
+        """Returns the registers for the fields that only answer once"""
+        return self.startup_registers
+
+    def coalesce_fields(self, fields: List[DeviceField]) -> List[ReadableRegisters]:
+        """Cover the given fields with as few read requests as the limits allow.
+
+        A block covers a range, so re-asking for the few startup fields that
+        are still unanswered is cheaper than asking for the startup set again.
+        """
+        return _polling_blocks(fields)
 
     def get_pack_polling_registers(self) -> List[ReadableRegisters]:
         """Returns all registers required to poll device battery pack fields"""
@@ -142,8 +194,11 @@ class BluettiDevice:
 
         # Convert value to an integer if its not already
         if isinstance(field, SelectField):
-            if not isinstance(value, int):
-                value = field.e[value].value
+            option = field.to_option(value)
+            if option is None:
+                # Not an option this field can hold.
+                return None
+            value = option.value
         elif isinstance(field, SwitchField):
             value = 1 if value else 0
         elif isinstance(field, NumberField):

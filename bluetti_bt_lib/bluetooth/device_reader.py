@@ -10,7 +10,7 @@ from bleak_retry_connector import BleakClientWithServiceCache, establish_connect
 from cryptography.exceptions import InvalidSignature
 
 from .encryption import BluettiEncryption, Message, MessageType, AES_BLOCK_SIZE
-from ..base_devices import BluettiDevice
+from ..base_devices import BluettiDevice, STARTUP_FIELDS
 from ..const import NOTIFY_UUID, WRITE_UUID
 from ..fields import FieldName
 from ..registers import ReadableRegisters, DeviceRegister
@@ -93,6 +93,10 @@ class DeviceReader:
         """Raw bytes of the previous notification, used to drop repeats."""
         self.handshake_failed = False
         """Set when the key exchange cannot complete; only a reconnect fixes it."""
+        self._startup_values: dict[str, Any] = {}
+        """Answers for the infrequent fields (bluetti_device.STARTUP_FIELDS).
+        They are asked for once per connection and reported from here for the
+        rest of it, so a consumer still sees the same keys every cycle."""
         self._connected = False
         self._answered = False
         """Whether this connection has answered a request yet. A station that
@@ -190,6 +194,10 @@ class DeviceReader:
         self.encryption.reset()
         self.encrypted_buffer.clear()
         self.last_notification = None
+        # The infrequent fields belong to the connection that answered them. A
+        # station that drops and comes back may have been renamed or reflashed
+        # in the meantime, so ask for them again.
+        self._startup_values.clear()
 
         if self.ble_client is None and self.client and self.client.is_connected:
             try:
@@ -351,6 +359,7 @@ class DeviceReader:
             self.encrypted_buffer.clear()
             self.last_notification = None
             self._connected = False
+            self._startup_values.clear()
 
     async def _read_pack(
         self, pack: int, pack_registers: List[ReadableRegisters], raw: bool
@@ -419,6 +428,18 @@ class DeviceReader:
             # cycle said nothing about the slots rather than finding them empty.
             pack_registers = []
 
+        if only_registers is None:
+            # The infrequent fields are only asked for until this connection
+            # has answered them. A field that never parses stays in the cycle,
+            # so a broken read is retried rather than remembered as missing.
+            pending = [
+                f
+                for f in self.bluetti_device.startup_fields
+                if f.name not in self._startup_values
+            ]
+            if pending:
+                registers = registers + self.bluetti_device.coalesce_fields(pending)
+
         parsed_data: dict = {}
 
         self.logger.debug("Reading device registers")
@@ -466,6 +487,13 @@ class DeviceReader:
 
                         parsed_data.update(parsed)
 
+                        # Keep the answers to the infrequent fields as soon as
+                        # they arrive: a cycle that fails further down should
+                        # not lose them and ask for all of them again.
+                        for name, value in parsed.items():
+                            if name in STARTUP_FIELDS:
+                                self._startup_values[name] = value
+
                     # Register 96 counts the packs that are installed, but it
                     # does not say which slots they occupy: an AC300 holding
                     # packs in slots 2, 3 and 4 still reports 3. So the walk
@@ -486,10 +514,10 @@ class DeviceReader:
                         if installed is not None and len(slots) >= installed:
                             break
 
-                        body = register.parse_response(
-                            await self._async_send_command(
-                                self.bluetti_device.get_pack_selector(pack),
-                            )
+                        # The selector carries no answer worth parsing; the
+                        # slot's registers are read next.
+                        await self._async_send_command(
+                            self.bluetti_device.get_pack_selector(pack),
                         )
 
                         # We need to wait for the powerstation to populate all
@@ -563,6 +591,14 @@ class DeviceReader:
             except BaseException as err:
                 self.logger.warning("Unknown error %s", err)
                 return None
+
+            # Report the infrequent fields from the cache. A cycle only asks
+            # for the ones that are still unanswered, but a consumer should
+            # keep seeing every key it has already been given. A raw scan
+            # reports register ranges rather than fields, so it is left alone.
+            if not raw:
+                for name, value in self._startup_values.items():
+                    parsed_data.setdefault(name, value)
 
             # Check if dict is empty
             if not parsed_data:
