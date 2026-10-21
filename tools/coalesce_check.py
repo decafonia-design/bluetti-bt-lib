@@ -21,6 +21,9 @@ async def main() -> None:
     parser.add_argument("-t", "--type", required=True)
     parser.add_argument("--enc", action="store_true", help="station needs encryption")
     parser.add_argument("-n", "--rounds", type=int, default=5)
+    parser.add_argument(
+        "--gap", type=float, default=2.0, help="seconds between rounds"
+    )
     args = parser.parse_args()
 
     device = build_device(args.type + "12345678")
@@ -59,21 +62,27 @@ async def main() -> None:
 
         if data is None:
             print(f"[{round_number}] {elapsed:5.1f}s  FAILED")
-            continue
+            # A failed read leaves the link up with the notifier cleared.
+            # Standalone runs have to drop it themselves, otherwise the
+            # station is still connected to us, stops advertising, and every
+            # later round fails with "Device not found". Home Assistant does
+            # not hit this because it hands the reader a client it owns.
+            await reader.disconnect()
+        else:
+            ok += 1
+            missing = {name for name in expected if name not in data}
+            if uses_packs:
+                for slot in data.get(FieldName.PACK_SLOTS.value) or []:
+                    for name in pack_names:
+                        if f"pack_{slot}_{name}" not in data:
+                            missing.add(f"pack_{slot}_{name}")
+            missing_all |= missing
+            print(
+                f"[{round_number}] {elapsed:5.1f}s  {len(data)} fields"
+                + (f"  missing: {sorted(missing)}" if missing else "")
+            )
 
-        ok += 1
-        missing = {name for name in expected if name not in data}
-        if uses_packs:
-            for slot in data.get(FieldName.PACK_SLOTS.value) or []:
-                for name in pack_names:
-                    if f"pack_{slot}_{name}" not in data:
-                        missing.add(f"pack_{slot}_{name}")
-        missing_all |= missing
-        print(
-            f"[{round_number}] {elapsed:5.1f}s  {len(data)} fields"
-            + (f"  missing: {sorted(missing)}" if missing else "")
-        )
-        await asyncio.sleep(2)
+        await asyncio.sleep(args.gap)
 
     print(f"\n{ok}/{args.rounds} rounds answered, median {statistics.median(times):.1f}s")
     if missing_all:
