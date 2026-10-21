@@ -54,13 +54,15 @@ def decode(body: bytes) -> list[int]:
 
 async def read_raw(reader: DeviceReader, label: str) -> dict[int, int]:
     """Read register 96 and the selector block without parsing any fields."""
-    data = await reader.read(
-        only_registers=[
-            ReadableRegisters(PACK_COUNT_REGISTER, 1),
-            ReadableRegisters(BLOCK_START, BLOCK_QUANTITY),
-        ],
-        raw=True,
-    )
+    wanted = [
+        ReadableRegisters(PACK_COUNT_REGISTER, 1),
+        ReadableRegisters(BLOCK_START, BLOCK_QUANTITY),
+    ]
+    data = await reader.read(only_registers=wanted, raw=True)
+    if data is None or not data.get(PACK_COUNT_REGISTER):
+        # The first read after a walk is the one that goes missing most often,
+        # so ask again before giving up on the comparison.
+        data = await reader.read(only_registers=wanted, raw=True)
     if data is None:
         print(f"    {label}: read failed")
         return {}
@@ -159,11 +161,14 @@ async def main() -> None:
             after = await read_raw(reader, "after walk")
 
             if before and after:
-                first, second = (
-                    before[PACK_COUNT_REGISTER],
-                    after[PACK_COUNT_REGISTER],
-                )
-                if first != second:
+                first = before.get(PACK_COUNT_REGISTER)
+                second = after.get(PACK_COUNT_REGISTER)
+                if first is None or second is None:
+                    print(
+                        f"    >>> register {PACK_COUNT_REGISTER} did not answer"
+                        " on one of the reads, comparison skipped"
+                    )
+                elif first != second:
                     print(
                         f"    >>> register {PACK_COUNT_REGISTER} moved "
                         f"{first} -> {second} across the walk"

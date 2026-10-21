@@ -220,6 +220,38 @@ class TestSelectorRestore(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(second.get("pack_num"), 3)
         self.assertEqual(second.get("pack_slots"), [2, 3, 4])
 
+    async def test_a_walk_cut_short_still_puts_the_selector_back(self):
+        # A walk that dies part way through leaves the selector on the slot it
+        # was probing, which is enough to corrupt the count on its own.
+        ble_mock = SelectorSideEffectMock({2: (5120, 80), 3: (5110, 70)})
+        ble_mock.add_r_int(96, 3)
+        ble_mock.add_r_int(PACK_SELECTOR_REGISTER, 3)
+
+        reader = DeviceReader(
+            "00:11:00:11:00:11", AC300(), asyncio.Future, ble_client=ble_mock
+        )
+        real_read_pack = reader._read_pack
+
+        async def quiet_slot_3(pack, pack_registers, raw):
+            if pack == 3:
+                raise device_reader.ResponseTimeout("slot 3 stopped answering")
+            return await real_read_pack(pack, pack_registers, raw)
+
+        with patch.object(device_reader, "PACK_SELECTOR_SETTLE_SECONDS", 0), patch.object(
+            reader, "_read_pack", quiet_slot_3
+        ):
+            self.assertIsNone(await reader.read())
+
+        # Slot 3 was probed, then the selector went back to 3 anyway.
+        self.assertEqual(ble_mock.selected, [1, 2, 3, 3])
+
+        # The next cycle still reads three packs, not the number the aborted
+        # walk would have left behind.
+        with patch.object(device_reader, "PACK_SELECTOR_SETTLE_SECONDS", 0):
+            second = await reader.read()
+        self.assertEqual(second.get("pack_num"), 3)
+        self.assertEqual(second.get("pack_slots"), [2, 3])
+
     async def test_a_selector_that_reads_as_no_slot_is_left_alone(self):
         # Nothing sensible was saved, so the walk must not invent a write.
         ble_mock = SlotAwareMock({1: (5120, 80)})
