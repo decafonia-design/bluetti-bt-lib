@@ -128,16 +128,20 @@ class TestBluettiDevice(unittest.TestCase):
         device = BluettiDevice(fields=fields, pack_fields=pack_fields, max_packs=2)
 
         polling_registers = device.get_polling_registers()
-        self.assertEqual(len(polling_registers), 4)
+        self.assertEqual(len(polling_registers), 2)
         self.assertIsInstance(polling_registers[0], ReadableRegisters)
         self.assertIsInstance(polling_registers[1], ReadableRegisters)
-        self.assertIsInstance(polling_registers[2], ReadableRegisters)
 
         # Check if sorted correctly by address
-        self.assertEqual(polling_registers[0].starting_address, 100)
-        self.assertEqual(polling_registers[1].starting_address, 150)
-        self.assertEqual(polling_registers[2].starting_address, 200)
-        self.assertEqual(polling_registers[3].starting_address, 2011)
+        self.assertEqual(polling_registers[0].starting_address, 150)
+        self.assertEqual(polling_registers[1].starting_address, 2011)
+
+        # The identity fields are only asked for once per connection, so they
+        # are blocked out separately rather than riding along every cycle.
+        startup_registers = device.get_startup_registers()
+        self.assertEqual(len(startup_registers), 2)
+        self.assertEqual(startup_registers[0].starting_address, 100)
+        self.assertEqual(startup_registers[1].starting_address, 200)
 
         pack_polling_registers = device.get_pack_polling_registers()
         self.assertEqual(len(pack_polling_registers), 1)
@@ -206,7 +210,7 @@ class TestBluettiDevice(unittest.TestCase):
         # A field wider than the block limit cannot fit inside it, and the
         # limit stops anything else from joining it.
         fields = [
-            StringField(FieldName.DEVICE_TYPE, 100, 12),
+            StringField(FieldName.PACK_TYPE, 100, 12),
             BoolField(FieldName.CTRL_AC, 113),
         ]
 
@@ -217,6 +221,74 @@ class TestBluettiDevice(unittest.TestCase):
         self.assertEqual(blocks[0].starting_address, 100)
         self.assertEqual(blocks[0].quantity, 12)
         self.assertEqual(blocks[1].starting_address, 113)
+
+    def test_infrequent_fields_split_out_of_the_cycle(self):
+        # Identity, firmware and the Wi-Fi name only change when someone
+        # intervenes, so they leave the cycle and answer once per connection.
+        fields = [
+            StringField(FieldName.WIFI_NAME, 12002, 16),
+            StringField(FieldName.VER_BMS, 6175, 10),
+            StringField(FieldName.VER_ARM, 23, 2),
+            StringField(FieldName.VER_DSP, 25, 2),
+            StringField(FieldName.DEVICE_TYPE, 110, 6),
+            SerialNumberField(FieldName.DEVICE_SN, 116),
+            UIntField(FieldName.BATTERY_SOC, 102, min=0, max=100),
+        ]
+
+        device = BluettiDevice(fields=fields)
+
+        self.assertEqual(
+            {f.name for f in device.startup_fields},
+            {
+                FieldName.WIFI_NAME.value,
+                FieldName.VER_BMS.value,
+                FieldName.VER_ARM.value,
+                FieldName.VER_DSP.value,
+                FieldName.DEVICE_TYPE.value,
+                FieldName.DEVICE_SN.value,
+            },
+        )
+        self.assertEqual(
+            [f.name for f in device.polling_fields], [FieldName.BATTERY_SOC.value]
+        )
+
+        # Only the live field is polled...
+        blocks = device.get_polling_registers()
+        self.assertEqual(len(blocks), 1)
+        self.assertEqual(blocks[0].starting_address, 102)
+
+        # ...and every startup field is still covered by a request, so the
+        # split cannot leave a field unread.
+        covered = set()
+        for block in device.get_startup_registers():
+            covered.update(
+                range(block.starting_address, block.starting_address + block.quantity)
+            )
+
+        for f in device.startup_fields:
+            self.assertTrue(
+                all(a in covered for a in range(f.address, f.address + f.size)),
+                f"{f.name} is not covered by a startup request",
+            )
+
+    def test_coalesce_fields_covers_a_subset(self):
+        # Re-asking for the startup fields that are still unanswered should not
+        # pay for the ones that already answered.
+        fields = [
+            StringField(FieldName.VER_ARM, 23, 2),
+            StringField(FieldName.VER_DSP, 25, 2),
+            StringField(FieldName.DEVICE_TYPE, 110, 6),
+        ]
+
+        device = BluettiDevice(fields=fields)
+
+        self.assertEqual(len(device.get_startup_registers()), 2)
+
+        pending = [f for f in device.startup_fields if f.name == "device_type"]
+        blocks = device.coalesce_fields(pending)
+        self.assertEqual(len(blocks), 1)
+        self.assertEqual(blocks[0].starting_address, 110)
+        self.assertEqual(blocks[0].quantity, 6)
 
     def test_pack_fields_keep_one_request_each(self):
         pack_fields = [

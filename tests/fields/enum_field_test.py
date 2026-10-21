@@ -28,3 +28,17 @@ class TestEnumField(unittest.TestCase):
     def test_is_writeable(self):
         self.field = EnumField(FieldName.AC_OUTPUT_MODE, 70, Dummy)
         self.assertFalse(self.field.is_writeable())
+
+    def test_to_option(self):
+        field = EnumField(FieldName.AC_OUTPUT_MODE, 70, Dummy)
+
+        # The three ways a caller refers to an option all name the same one.
+        self.assertIs(field.to_option("VALUE_1"), Dummy.VALUE_1)
+        self.assertIs(field.to_option(Dummy.VALUE_1), Dummy.VALUE_1)
+        self.assertIs(field.to_option(1), Dummy.VALUE_1)
+
+        # Nothing this field can hold, so the caller keeps what it was given.
+        self.assertIsNone(field.to_option("NOPE"))
+        self.assertIsNone(field.to_option(7))
+        self.assertIsNone(field.to_option(None))
+

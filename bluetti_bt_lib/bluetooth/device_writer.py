@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import struct
+from time import monotonic
 from typing import Any
 from dataclasses import dataclass
 
@@ -11,10 +12,28 @@ from bleak.exc import BleakError
 from .encryption import AES_BLOCK_SIZE, BluettiEncryption, Message, MessageType
 from ..const import NOTIFY_UUID, WRITE_UUID
 from ..base_devices import BluettiDevice
+from ..fields import EnumField
 from ..utils.privacy import mac_loggable
-from .device_reader import DeviceReader
+from .device_reader import DeviceReader, HANDSHAKE_TIMEOUT_SECONDS
 from ..registers import ReadableRegisters, WriteableRegister
 from ..devices.charger2 import CHARGER2, CHARGER2_CONTROL_STATES
+
+
+def _expected_readback(field_obj, value: Any) -> Any:
+    """Put a requested write value in the form the field parses back to.
+
+    A select option can be requested by its Enum member, by the option name
+    that Home Assistant hands over, or by the raw number, while the read-back
+    always parses to the Enum member. Comparing the two as they were made a
+    verified select write report itself as not applied.
+    """
+    if isinstance(field_obj, EnumField):
+        option = field_obj.to_option(value)
+        if option is not None:
+            return option
+
+    return value
+
 
 @dataclass
 class WriteVerificationResult:
@@ -103,6 +122,32 @@ class DeviceWriter:
             self.encryption = encryption
             self._borrowed_encryption = True
         self.encryption_ready.set()
+
+    async def _await_encryption_ready(self) -> bool:
+        """Wait for the handshake to finish before a verified write.
+
+        The wait is bounded. An unbounded loop holds the polling lock until the
+        whole write times out, which leaves the caller with a bare timeout and
+        no explanation, and stops the reader from polling in the meantime.
+        """
+        # Only part of the write budget goes to the wait: a wait that runs the
+        # whole timeout leaves the caller with a bare timeout instead of the
+        # reason, and the write itself still needs time to be sent.
+        wait_for = min(HANDSHAKE_TIMEOUT_SECONDS, self.config.timeout / 2)
+        deadline = monotonic() + wait_for
+
+        while not self.reader.encryption.is_ready_for_commands:
+            if monotonic() >= deadline:
+                self.logger.warning(
+                    "Encryption session was not ready within %ss, so the write "
+                    "was not sent",
+                    wait_for,
+                )
+                return False
+
+            await asyncio.sleep(0.1)
+
+        return True
 
     async def connect(self) -> bool:
         """Establish a persistent connection to the device.
@@ -307,8 +352,8 @@ class DeviceWriter:
                             )
 
                     if verify and self.config.use_encryption:
-                        while not self.reader.encryption.is_ready_for_commands:
-                            await asyncio.sleep(0.1)
+                        if not await self._await_encryption_ready():
+                            return WriteVerificationResult(False, False)
 
                     if is_shared_control:
                         raw_data = await self.reader.read_locked(
@@ -474,7 +519,7 @@ class DeviceWriter:
                             return WriteVerificationResult(True, False)
 
                     actual_value = values.get(field)
-                    verified = actual_value == value
+                    verified = actual_value == _expected_readback(field_obj, value)
 
                     self.logger.debug(
                         "Write verification result for %s: requested %r, "
