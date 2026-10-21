@@ -28,9 +28,12 @@ async def main() -> None:
         print("unsupported type")
         return
 
+    # Pack fields answer per slot as pack_<slot>_<name>, so the bare names are
+    # not expected keys; the slots that answered come back in pack_slots.
     expected = {field.name for field in device.fields}
-    if device.pack_fields and device.max_packs:
-        expected |= {field.name for field in device.pack_fields}
+    pack_names = [field.name for field in device.pack_fields]
+    uses_packs = bool(pack_names) and device.max_packs > 0
+    if uses_packs:
         expected.add(FieldName.PACK_SLOTS.value)
 
     print(f"{args.type}: {len(device.polling_registers)} main blocks, "
@@ -60,6 +63,11 @@ async def main() -> None:
 
         ok += 1
         missing = {name for name in expected if name not in data}
+        if uses_packs:
+            for slot in data.get(FieldName.PACK_SLOTS.value) or []:
+                for name in pack_names:
+                    if f"pack_{slot}_{name}" not in data:
+                        missing.add(f"pack_{slot}_{name}")
         missing_all |= missing
         print(
             f"[{round_number}] {elapsed:5.1f}s  {len(data)} fields"
