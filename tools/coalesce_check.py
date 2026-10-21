@@ -24,6 +24,12 @@ async def main() -> None:
     parser.add_argument(
         "--gap", type=float, default=2.0, help="seconds between rounds"
     )
+    parser.add_argument(
+        "--packs-every",
+        type=int,
+        default=1,
+        help="walk the pack slots every Nth round (0 = never, 1 = every round)",
+    )
     args = parser.parse_args()
 
     device = build_device(args.type + "12345678")
@@ -51,14 +57,21 @@ async def main() -> None:
     )
 
     times: list[float] = []
+    fast_times: list[float] = []
     ok = 0
     missing_all: set[str] = set()
+    main_only = expected - {FieldName.PACK_SLOTS.value}
 
     for round_number in range(1, args.rounds + 1):
+        walk_packs = args.packs_every >= 1 and (
+            args.packs_every == 1 or round_number % args.packs_every == 0
+        )
         started = time.monotonic()
-        data = await reader.read()
+        data = await reader.read(include_packs=walk_packs)
         elapsed = time.monotonic() - started
         times.append(elapsed)
+        if not walk_packs:
+            fast_times.append(elapsed)
 
         if data is None:
             print(f"[{round_number}] {elapsed:5.1f}s  FAILED")
@@ -70,8 +83,9 @@ async def main() -> None:
             await reader.disconnect()
         else:
             ok += 1
-            missing = {name for name in expected if name not in data}
-            if uses_packs:
+            check = expected if walk_packs else main_only
+            missing = {name for name in check if name not in data}
+            if walk_packs and uses_packs:
                 for slot in data.get(FieldName.PACK_SLOTS.value) or []:
                     for name in pack_names:
                         if f"pack_{slot}_{name}" not in data:
@@ -83,6 +97,7 @@ async def main() -> None:
             )
             print(
                 f"[{round_number}] {elapsed:5.1f}s  {len(data)} fields"
+                + ("" if walk_packs else "  no pack walk")
                 + (f"  packs[{pack_values}]" if uses_packs and pack_values else "")
                 + (f"  missing: {sorted(missing)}" if missing else "")
             )
@@ -90,6 +105,8 @@ async def main() -> None:
         await asyncio.sleep(args.gap)
 
     print(f"\n{ok}/{args.rounds} rounds answered, median {statistics.median(times):.1f}s")
+    if fast_times:
+        print(f"no-pack rounds: median {statistics.median(fast_times):.1f}s")
     if missing_all:
         print("fields never answered:", sorted(missing_all))
     else:
