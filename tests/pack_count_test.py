@@ -200,6 +200,26 @@ class TestPackPolling(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("pack_6_voltage", data)
 
 
+    async def test_pack_walk_can_be_skipped_for_a_cycle(self):
+        # A consumer that polls often can walk the slots now and then. A
+        # skipped cycle sends no selector writes and says nothing about the
+        # slots, which is not the same as reporting them empty.
+        ble_mock = SlotAwareMock({1: (5120, 80), 2: (5110, 70)})
+        ble_mock.add_r_int(96, 2)
+
+        reader = DeviceReader(
+            "00:11:00:11:00:11", AC300(), asyncio.Future, ble_client=ble_mock
+        )
+        data = await reader.read(include_packs=False)
+
+        self.assertIsNotNone(data)
+        self.assertEqual(ble_mock.selected, [])
+        self.assertEqual(data.get("pack_num"), 2)
+        self.assertNotIn("pack_slots", data)
+        self.assertNotIn("pack_1_voltage", data)
+        self.assertNotIn("pack_2_battery_soc", data)
+
+
 class TestPackSettle(unittest.IsolatedAsyncioTestCase):
     """The settle wait is paid in full only by slots that answer with nothing."""
 

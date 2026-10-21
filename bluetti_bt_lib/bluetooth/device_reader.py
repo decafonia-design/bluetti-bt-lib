@@ -394,7 +394,10 @@ class DeviceReader:
         return False
 
     async def read(
-        self, only_registers: List[ReadableRegisters] | None = None, raw: bool = False
+        self,
+        only_registers: List[ReadableRegisters] | None = None,
+        raw: bool = False,
+        include_packs: bool = True,
     ) -> dict | None:
 
         registers = self.bluetti_device.get_polling_registers()
@@ -402,6 +405,13 @@ class DeviceReader:
 
         if only_registers is not None:
             registers = only_registers
+            pack_registers = []
+        elif not include_packs:
+            # The pack walk is a selector write and a settle wait per slot,
+            # which is most of a cycle on a tower station. A consumer that
+            # polls often can walk the slots now and then instead. No
+            # pack_slots key is reported, so the consumer can tell that this
+            # cycle said nothing about the slots rather than finding them empty.
             pack_registers = []
 
         parsed_data: dict = {}
