@@ -361,6 +361,57 @@ class DeviceReader:
             self._connected = False
             self._startup_values.clear()
 
+    async def _read_uint16(self, address: int) -> int | None:
+        """Read one uint16 register, or None when the answer is too short."""
+        registers = ReadableRegisters(address, 1)
+        body = registers.parse_response(await self._async_send_command(registers))
+        if len(body) < 2:
+            return None
+        return int.from_bytes(body[:2], "big")
+
+    async def _restore_pack_selector(
+        self, selector_register: int | None, saved_selector: int | None
+    ) -> None:
+        """Put the pack bank selector back where the station had it.
+
+        Writing a slot number into the selector makes a real station report that
+        slot as the number of packs installed, and the inflated count outlives
+        the cycle, so every later cycle reads back a number the walk itself
+        caused. A walk that runs to the end leaves the selector on the last slot;
+        a walk cut short leaves it on whichever slot was being probed. Both need
+        putting back.
+        """
+        if selector_register is None or saved_selector is None:
+            return
+        if not 1 <= saved_selector <= self.bluetti_device.max_packs:
+            # Nothing sensible to put back, so do not write a slot number the
+            # station never claimed.
+            self.logger.debug(
+                "Pack selector register %s read as %s, leaving it alone",
+                selector_register,
+                saved_selector,
+            )
+            return
+        try:
+            await self._async_send_command(
+                self.bluetti_device.get_pack_selector(saved_selector)
+            )
+            self.logger.debug(
+                "Restored pack selector register %s to %s",
+                selector_register,
+                saved_selector,
+            )
+        except Exception as err:
+            # The walk's own failure is the one worth reporting, so do not let a
+            # failed repair replace it. Do drop the desynced pipeline though:
+            # the answer to this write may still turn up.
+            self.logger.debug(
+                "Could not restore pack selector register %s: %s",
+                selector_register,
+                err,
+            )
+            await self._resync_link()
+
     async def _read_pack(
         self, pack: int, pack_registers: List[ReadableRegisters], raw: bool
     ) -> dict:
@@ -507,59 +558,79 @@ class DeviceReader:
                         # Raw scans report every slot, empty ones included.
                         installed = None
 
+                    # Probing the slots writes the bank selector, and real
+                    # stations react to that: the reported pack count climbs to
+                    # the highest slot written and stays there. Remember the
+                    # selector's own value so the walk can put it back.
+                    selector_register = self.bluetti_device.get_pack_selector_register()
+                    saved_selector: int | None = None
+                    if pack_registers and not raw and selector_register is not None:
+                        saved_selector = await self._read_uint16(selector_register)
+
                     slot_limit = self.bluetti_device.max_packs if pack_registers else 0
                     slots: list[int] = []
 
-                    for pack in range(1, slot_limit + 1):
-                        if installed is not None and len(slots) >= installed:
-                            break
+                    try:
+                        for pack in range(1, slot_limit + 1):
+                            if installed is not None and len(slots) >= installed:
+                                break
 
-                        # The selector carries no answer worth parsing; the
-                        # slot's registers are read next.
-                        await self._async_send_command(
-                            self.bluetti_device.get_pack_selector(pack),
-                        )
-
-                        # We need to wait for the powerstation to populate all
-                        # registers, but a loaded slot is usually ready before
-                        # that wait is over: look early, and only wait out the
-                        # remainder for a slot that came back empty.
-                        early_look = min(
-                            PACK_SELECTOR_EARLY_LOOK_SECONDS,
-                            PACK_SELECTOR_SETTLE_SECONDS,
-                        )
-                        await asyncio.sleep(early_look)
-
-                        pack_data = await self._read_pack(pack, pack_registers, raw)
-
-                        if not raw and not self._pack_has_data(pack_data):
-                            await asyncio.sleep(
-                                PACK_SELECTOR_SETTLE_SECONDS - early_look
+                            # The selector carries no answer worth parsing; the
+                            # slot's registers are read next.
+                            await self._async_send_command(
+                                self.bluetti_device.get_pack_selector(pack),
                             )
-                            pack_data = await self._read_pack(pack, pack_registers, raw)
 
-                        if raw or self._pack_has_data(pack_data):
-                            parsed_data.update(pack_data)
-                            slots.append(pack)
-                        else:
+                            # We need to wait for the powerstation to populate all
+                            # registers, but a loaded slot is usually ready before
+                            # that wait is over: look early, and only wait out the
+                            # remainder for a slot that came back empty.
+                            early_look = min(
+                                PACK_SELECTOR_EARLY_LOOK_SECONDS,
+                                PACK_SELECTOR_SETTLE_SECONDS,
+                            )
+                            await asyncio.sleep(early_look)
+
+                            pack_data = await self._read_pack(
+                                pack, pack_registers, raw
+                            )
+
+                            if not raw and not self._pack_has_data(pack_data):
+                                await asyncio.sleep(
+                                    PACK_SELECTOR_SETTLE_SECONDS - early_look
+                                )
+                                pack_data = await self._read_pack(
+                                    pack, pack_registers, raw
+                                )
+
+                            if raw or self._pack_has_data(pack_data):
+                                parsed_data.update(pack_data)
+                                slots.append(pack)
+                            else:
+                                self.logger.debug(
+                                    "Pack slot %s answered with nothing, treating it as empty",
+                                    pack,
+                                )
+
+                        # Tell the consumer which slots hold a pack. Key presence
+                        # on its own cannot say whether a slot is empty or a pack
+                        # that just failed to answer, and a consumer that hides
+                        # entities needs that difference to stay stable.
+                        if pack_registers and not raw:
+                            parsed_data[FieldName.PACK_SLOTS.value] = slots
+
+                        if installed is not None and len(slots) != installed:
                             self.logger.debug(
-                                "Pack slot %s answered with nothing, treating it as empty",
-                                pack,
+                                "Station reported %s packs, %s answered in slots 1-%s",
+                                installed,
+                                len(slots),
+                                slot_limit,
                             )
-
-                    # Tell the consumer which slots hold a pack. Key presence on
-                    # its own cannot say whether a slot is empty or a pack that
-                    # just failed to answer, and a consumer that hides entities
-                    # needs that difference to stay stable.
-                    if pack_registers and not raw:
-                        parsed_data[FieldName.PACK_SLOTS.value] = slots
-
-                    if installed is not None and len(slots) != installed:
-                        self.logger.debug(
-                            "Station reported %s packs, %s answered in slots 1-%s",
-                            installed,
-                            len(slots),
-                            slot_limit,
+                    finally:
+                        # A walk cut short still leaves the selector on the last
+                        # slot it probed, so put it back either way.
+                        await self._restore_pack_selector(
+                            selector_register, saved_selector
                         )
 
             except ResponseTimeout as err:
