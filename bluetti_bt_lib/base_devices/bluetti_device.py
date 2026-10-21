@@ -149,6 +149,15 @@ class BluettiDevice:
         """Returns the register to request a specific battery pack"""
         raise NotImplementedError
 
+    def get_pack_selector_register(self) -> int | None:
+        """Address of the register that picks which pack bank is readable.
+
+        None when the profile has no bank selector. The reader uses it to put
+        the value back after probing the slots: writing slot numbers into this
+        register changes the number of packs the station reports.
+        """
+        return None
+
     def parse(
         self, starting_address: int, data: bytes, pack_num: int | None = None
     ) -> dict:

@@ -361,6 +361,14 @@ class DeviceReader:
             self._connected = False
             self._startup_values.clear()
 
+    async def _read_uint16(self, address: int) -> int | None:
+        """Read one uint16 register, or None when the answer is too short."""
+        registers = ReadableRegisters(address, 1)
+        body = registers.parse_response(await self._async_send_command(registers))
+        if len(body) < 2:
+            return None
+        return int.from_bytes(body[:2], "big")
+
     async def _read_pack(
         self, pack: int, pack_registers: List[ReadableRegisters], raw: bool
     ) -> dict:
@@ -507,6 +515,15 @@ class DeviceReader:
                         # Raw scans report every slot, empty ones included.
                         installed = None
 
+                    # Probing the slots writes the bank selector, and real
+                    # stations react to that: the reported pack count climbs to
+                    # the highest slot written and stays there. Remember the
+                    # selector's own value so the walk can put it back.
+                    selector_register = self.bluetti_device.get_pack_selector_register()
+                    saved_selector: int | None = None
+                    if pack_registers and not raw and selector_register is not None:
+                        saved_selector = await self._read_uint16(selector_register)
+
                     slot_limit = self.bluetti_device.max_packs if pack_registers else 0
                     slots: list[int] = []
 
@@ -561,6 +578,29 @@ class DeviceReader:
                             len(slots),
                             slot_limit,
                         )
+
+                    if saved_selector is not None:
+                        if 1 <= saved_selector <= self.bluetti_device.max_packs:
+                            # Put the selector back where the station had it. A
+                            # walk that ends on the last slot leaves the reported
+                            # pack count raised to that slot, and the next cycle
+                            # reads the inflated number back.
+                            await self._async_send_command(
+                                self.bluetti_device.get_pack_selector(saved_selector)
+                            )
+                            self.logger.debug(
+                                "Restored pack selector register %s to %s",
+                                selector_register,
+                                saved_selector,
+                            )
+                        else:
+                            # Nothing sensible to put back, so do not write a
+                            # slot number the station never claimed.
+                            self.logger.debug(
+                                "Pack selector register %s read as %s, leaving it alone",
+                                selector_register,
+                                saved_selector,
+                            )
 
             except ResponseTimeout as err:
                 # Stop here rather than sending more commands: the answer to

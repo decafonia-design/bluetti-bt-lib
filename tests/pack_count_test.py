@@ -29,9 +29,11 @@ class SlotAwareMock(ClientMockNoEncryption):
         self._slot = 0
 
     async def write_gatt_char(self, char, data, response=None) -> None:
-        command = struct.unpack_from("!HHHH", data)
-        if command[1] == PACK_SELECTOR_REGISTER:
-            self._slot = command[2]
+        frame = struct.unpack_from("!HHHH", data)
+        # Only a write selects a slot; a read of the same register must not be
+        # mistaken for one.
+        if (frame[0] & 0xFF) == 6 and frame[1] == PACK_SELECTOR_REGISTER:
+            self._slot = frame[2]
             self.selected.append(self._slot)
         await super().write_gatt_char(char, data, response)
 
@@ -54,6 +56,21 @@ class CountingSlotMock(SlotAwareMock):
         if starting_address == PACK_VOLTAGE_REGISTER:
             self.pack_reads.append(self._slot)
         return super()._get_register(starting_address, size)
+
+
+class SelectorSideEffectMock(SlotAwareMock):
+    """A station whose reported pack count follows the slot it was last given.
+
+    Observed on an AC300: writing slot 4 into the selector leaves register 96
+    claiming four packs, so a walk that ends on the top slot changes what the
+    next cycle reads back.
+    """
+
+    async def write_gatt_char(self, char, data, response=None) -> None:
+        frame = struct.unpack_from("!HHHH", data)
+        if (frame[0] & 0xFF) == 6 and frame[1] == PACK_SELECTOR_REGISTER:
+            self.add_r_int(96, frame[2])
+        await super().write_gatt_char(char, data, response)
 
 
 async def _read(device, ble_mock, raw: bool = False):
@@ -91,6 +108,9 @@ class TestPackSlots(unittest.IsolatedAsyncioTestCase):
     async def _read(self, device: BaseDeviceV1, packs: dict, pack_num: int):
         ble_mock = SlotAwareMock(packs)
         ble_mock.add_r_int(96, pack_num)
+        # A station at rest keeps the selector pointing at its last pack, which
+        # is what the reader reads back before a walk.
+        ble_mock.add_r_int(PACK_SELECTOR_REGISTER, pack_num)
         return await _read(device, ble_mock), ble_mock
 
     async def test_packs_do_not_have_to_start_at_slot_one(self):
@@ -107,6 +127,8 @@ class TestPackSlots(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(data.get("pack_3_voltage"), Decimal("51.1"))
         self.assertEqual(data.get("pack_4_voltage"), Decimal("51.0"))
         self.assertEqual(data.get("pack_4_battery_soc"), 60)
+        # Every slot was probed, then the selector went back where it was.
+        self.assertEqual(ble_mock.selected, [1, 2, 3, 4, 3])
 
     async def test_empty_slots_between_packs_are_skipped(self):
         data, ble_mock = await self._read(
@@ -114,7 +136,7 @@ class TestPackSlots(unittest.IsolatedAsyncioTestCase):
         )
 
         # The gaps have to be walked, so the walk reaches slot 4 and stops.
-        self.assertEqual(ble_mock.selected, [1, 2, 3, 4])
+        self.assertEqual(ble_mock.selected, [1, 2, 3, 4, 2])
         self.assertEqual(data.get("pack_slots"), [2, 4])
         self.assertEqual(data.get("pack_2_voltage"), Decimal("51.2"))
         self.assertEqual(data.get("pack_4_voltage"), Decimal("51.0"))
@@ -127,7 +149,7 @@ class TestPackSlots(unittest.IsolatedAsyncioTestCase):
             AC500(), {1: (5120, 80), 2: (5110, 70)}, pack_num=2
         )
 
-        self.assertEqual(ble_mock.selected, [1, 2])
+        self.assertEqual(ble_mock.selected, [1, 2, 2])
         self.assertEqual(data.get("pack_slots"), [1, 2])
         self.assertEqual(data.get("pack_2_voltage"), Decimal("51.1"))
         self.assertNotIn("pack_3_voltage", data)
@@ -148,9 +170,10 @@ class TestPackSlots(unittest.IsolatedAsyncioTestCase):
         device.fields = [f for f in device.fields if f.name != "pack_num"]
 
         ble_mock = SlotAwareMock({5: (5100, 60)})
+        ble_mock.add_r_int(PACK_SELECTOR_REGISTER, 5)
         data = await _read(device, ble_mock)
 
-        self.assertEqual(ble_mock.selected, [1, 2, 3, 4, 5, 6])
+        self.assertEqual(ble_mock.selected, [1, 2, 3, 4, 5, 6, 5])
         self.assertEqual(data.get("pack_slots"), [5])
         self.assertEqual(data.get("pack_5_voltage"), Decimal("51.0"))
         self.assertNotIn("pack_6_voltage", data)
@@ -171,6 +194,40 @@ class TestPackSlots(unittest.IsolatedAsyncioTestCase):
 
         self.assertIsNotNone(data)
         self.assertNotIn("pack_slots", data)
+
+
+class TestSelectorRestore(unittest.IsolatedAsyncioTestCase):
+    async def test_pack_count_survives_a_walk(self):
+        # The count the station reports has to be the same in the cycle after a
+        # walk as it was in the cycle that walked. Without the restore, three
+        # packs in slots 2, 3 and 4 come back as four from then on.
+        ble_mock = SelectorSideEffectMock(
+            {2: (5120, 80), 3: (5110, 70), 4: (5100, 60)}
+        )
+        ble_mock.add_r_int(96, 3)
+        ble_mock.add_r_int(PACK_SELECTOR_REGISTER, 3)
+
+        reader = DeviceReader(
+            "00:11:00:11:00:11", AC300(), asyncio.Future, ble_client=ble_mock
+        )
+
+        with patch.object(device_reader, "PACK_SELECTOR_SETTLE_SECONDS", 0):
+            first = await reader.read()
+            second = await reader.read()
+
+        self.assertEqual(ble_mock.selected, [1, 2, 3, 4, 3, 1, 2, 3, 4, 3])
+        self.assertEqual(first.get("pack_num"), 3)
+        self.assertEqual(second.get("pack_num"), 3)
+        self.assertEqual(second.get("pack_slots"), [2, 3, 4])
+
+    async def test_a_selector_that_reads_as_no_slot_is_left_alone(self):
+        # Nothing sensible was saved, so the walk must not invent a write.
+        ble_mock = SlotAwareMock({1: (5120, 80)})
+        ble_mock.add_r_int(96, 1)
+
+        await _read(AC300(), ble_mock)
+
+        self.assertEqual(ble_mock.selected, [1])
 
 
 class TestPackPolling(unittest.IsolatedAsyncioTestCase):

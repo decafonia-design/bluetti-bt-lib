@@ -2,12 +2,14 @@ import asyncio
 import struct
 import unittest
 
+from unittest.mock import patch
+
 from bleak.exc import BleakError
 
 from bluetti_bt_lib.base_devices import BaseDeviceV1
 from bluetti_bt_lib import DeviceReader
 from bluetti_bt_lib.bluetooth import DeviceReaderConfig
-from bluetti_bt_lib.fields import FieldName
+from bluetti_bt_lib.fields import DecimalField, FieldName, UIntField
 from bluetti_bt_lib.registers import ReadableRegisters
 from bluetti_bt_lib.utils.bleak_client_mock import ClientMockNoEncryption
 
@@ -25,6 +27,60 @@ class RequestRecordingMock(ClientMockNoEncryption):
             self.reads.append(struct.unpack_from("!HH", command, 2))
 
         await super().write_gatt_char(char_specifier, data, response)
+
+
+class PackStation(BaseDeviceV1):
+    """Small V1 profile with pack slots, so a test can exercise the walk."""
+
+    def __init__(self):
+        super().__init__(
+            additional_fields=[UIntField(FieldName.PACK_NUM, 96)],
+            pack_fields=[
+                DecimalField(FieldName.PACK_VOLTAGE, 98, 2),
+                UIntField(FieldName.PACK_BATTERY_SOC, 99),
+            ],
+            max_packs=4,
+        )
+
+
+class SelectorSideEffectMock(ClientMockNoEncryption):
+    """Mock that applies writes to its register map.
+
+    A tower station treats a write to the pack bank selector as a claim about
+    how many packs it holds, so the installed pack count follows whatever slot
+    was last selected. That is the side effect the walk has to undo.
+    """
+
+    SELECTOR_REGISTER = 3006
+    PACK_COUNT_REGISTER = 96
+    EMPTY_SLOT = 1
+
+    def __init__(self):
+        super().__init__()
+        self.selector_writes: list[int] = []
+
+    def set_register(self, register: int, value: int) -> None:
+        struct.pack_into("!H", self._bytemap, register * 2, value)
+
+    def register_value(self, register: int) -> int:
+        return struct.unpack_from("!H", self._bytemap, register * 2)[0]
+
+    async def write_gatt_char(self, char_specifier, data, response=None):
+        command = bytes(data)
+        if len(command) >= 6 and command[1] == 6:
+            address, value = struct.unpack_from("!HH", command, 2)
+            self.set_register(address, value)
+            if address == self.SELECTOR_REGISTER:
+                self.selector_writes.append(value)
+                self.set_register(self.PACK_COUNT_REGISTER, value)
+
+        await super().write_gatt_char(char_specifier, data, response)
+
+    def _get_register(self, addr: int, size: int) -> bytes:
+        # Only the selected slot answers: slot 1 holds nothing in this test.
+        if addr >= 98 and self.register_value(self.SELECTOR_REGISTER) == 1:
+            return bytes(size * 2)
+        return super()._get_register(addr, size)
 
 
 class TestDeviceReader(unittest.IsolatedAsyncioTestCase):
@@ -272,3 +328,30 @@ class TestDeviceReader(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(self.ble_mock.reads)
         self.assertIn((36, 8), self.ble_mock.reads)
+
+    @patch(
+        "bluetti_bt_lib.bluetooth.device_reader.PACK_SELECTOR_SETTLE_SECONDS",
+        0.01,
+    )
+    @patch(
+        "bluetti_bt_lib.bluetooth.device_reader.PACK_SELECTOR_EARLY_LOOK_SECONDS",
+        0.01,
+    )
+    async def test_pack_walk_restores_the_bank_selector(self):
+        # Probing the slots writes the pack bank selector, and a tower station
+        # reacts by reporting that many packs: walking slot 4 makes an AC300
+        # claim four. The walk has to put the selector back afterwards, or the
+        # next cycle reports the inflated count.
+        self.ble_mock = SelectorSideEffectMock()
+        self.ble_mock.set_register(96, 3)  # three packs installed
+        self.ble_mock.set_register(3006, 3)  # selector at rest matches the count
+        self.ble_mock.set_register(98, 5220)  # pack voltage
+        self.ble_mock.set_register(99, 45)  # pack state of charge
+
+        data = await self.build_reader(PackStation()).read()
+
+        # Slot 1 is empty, so the walk covers every slot and then restores.
+        self.assertEqual(self.ble_mock.selector_writes, [1, 2, 3, 4, 3])
+        self.assertEqual(self.ble_mock.register_value(96), 3)
+        self.assertEqual(data.get(FieldName.PACK_SLOTS.value), [2, 3, 4])
+        self.assertEqual(data.get(FieldName.PACK_NUM.value), 3)
