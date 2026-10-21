@@ -11,7 +11,8 @@ from ..fields import DeviceField, BoolField, BoolFieldNonZero, SwitchField, Sele
 # The block limit is the 10 register chunk that the full range scan
 # (bluetti_readall) already sends, which is a request size stations are known
 # to answer. The gap limit says how many unread registers it is worth carrying
-# along to save a round trip.
+# along to save a round trip. Battery pack fields are not merged; see
+# BluettiDevice.__init__.
 MAX_POLL_BLOCK = 10
 MAX_POLL_GAP = 4
 
@@ -61,7 +62,12 @@ class BluettiDevice:
         if len(self.pack_fields) == 0 or max_packs == 0:
             return
 
-        self.pack_polling_registers = _polling_blocks(self.pack_fields)
+        # Pack fields are not merged. Their bank is switched by a selector write
+        # followed by a settle wait, and an AC300 was seen ignoring a merged
+        # 98+2 read that the same station answers as two separate reads. The
+        # walk only saves one request per slot, which is not worth that risk.
+        for f in self.pack_fields:
+            self.pack_polling_registers.append(ReadableRegisters(f.address, f.size))
 
     def get_polling_registers(self) -> List[ReadableRegisters]:
         """Returns all registers required to poll device fields"""

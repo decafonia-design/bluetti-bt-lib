@@ -218,7 +218,7 @@ class TestBluettiDevice(unittest.TestCase):
         self.assertEqual(blocks[0].quantity, 12)
         self.assertEqual(blocks[1].starting_address, 113)
 
-    def test_pack_fields_are_coalesced_too(self):
+    def test_pack_fields_keep_one_request_each(self):
         pack_fields = [
             DecimalField(FieldName.PACK_VOLTAGE, 98, 2),
             UIntField(FieldName.PACK_BATTERY_SOC, 99),
@@ -229,9 +229,11 @@ class TestBluettiDevice(unittest.TestCase):
         )
 
         blocks = device.get_pack_polling_registers()
-        self.assertEqual(len(blocks), 1)
+        self.assertEqual(len(blocks), 2)
         self.assertEqual(blocks[0].starting_address, 98)
-        self.assertEqual(blocks[0].quantity, 2)
+        self.assertEqual(blocks[0].quantity, 1)
+        self.assertEqual(blocks[1].starting_address, 99)
+        self.assertEqual(blocks[1].quantity, 1)
 
     def test_switch_fields(self):
         fields = [
