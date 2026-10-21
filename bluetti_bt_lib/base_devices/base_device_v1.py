@@ -45,4 +45,7 @@ class BaseDeviceV1(BluettiDevice):
         return 1
 
     def get_pack_selector(self, pack: int) -> WriteableRegister:
-        return WriteableRegister(3006, pack)
+        return WriteableRegister(self.get_pack_selector_register(), pack)
+
+    def get_pack_selector_register(self) -> int:
+        return 3006

@@ -34,7 +34,14 @@ class TestAC300(unittest.TestCase):
         # main registers are read together instead; the pack reads stay as
         # they were.
         blocks = self.device.get_polling_registers()
-        self.assertEqual(len(blocks), 9)
+        self.assertEqual(len(blocks), 7)
+
+        # The identity and firmware registers are not part of the cycle; they
+        # are read once per connection (see STARTUP_FIELDS).
+        startup = self.device.get_startup_registers()
+        self.assertEqual(len(startup), 2)
+        self.assertEqual(startup[0].starting_address, 10)
+        self.assertEqual(startup[1].starting_address, 17)
 
         pack_blocks = self.device.get_pack_polling_registers()
         self.assertEqual(len(pack_blocks), 2)
