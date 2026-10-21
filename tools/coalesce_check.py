@@ -77,8 +77,13 @@ async def main() -> None:
                         if f"pack_{slot}_{name}" not in data:
                             missing.add(f"pack_{slot}_{name}")
             missing_all |= missing
+            pack_values = ", ".join(
+                f"s{slot}:{data.get(f'pack_{slot}_voltage')}V"
+                for slot in data.get(FieldName.PACK_SLOTS.value) or []
+            )
             print(
                 f"[{round_number}] {elapsed:5.1f}s  {len(data)} fields"
+                + (f"  packs[{pack_values}]" if uses_packs and pack_values else "")
                 + (f"  missing: {sorted(missing)}" if missing else "")
             )
 
