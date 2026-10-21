@@ -84,6 +84,9 @@ class FieldName(Enum):
     INTERNAL_DC_INPUT_CURRENT = "internal_dc_input_current"
     INTERNAL_DC_INPUT_POWER = "internal_dc_input_power"
     INTERNAL_DC_INPUT_VOLTAGE = "internal_dc_input_voltage"
+    # Station level pack count (not prefixed by the reader, unlike the
+    # pack_* fields below).
+    PACK_NUM = "pack_num"
     POWER_GENERATION = "power_generation"
     POWER_LIFTING_ON = "power_lifting_on"
     PV_S1_CURRENT = "pv_s1_current"
@@ -118,3 +121,6 @@ class FieldName(Enum):
     PACK_VER_SAFETY_MOD = "version_safety_module"
     PACK_VER_HV_MOD = "version_hv_module"
     PACK_VOLTAGE = "voltage"
+
+    # Not a register: the reader reports the slots it found packs in
+    PACK_SLOTS = "pack_slots"

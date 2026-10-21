@@ -57,6 +57,13 @@ class TestEL100V2(unittest.TestCase):
         # 105 mirrors the charge time at 104, so it is not a separate sensor.
         self.assertFalse(any(f.address == 105 for f in self.device.fields))
 
+    def test_ac_output_voltage_is_at_1431(self):
+        # 1511 tracks the grid input on this family: on a live EL100 V2 it
+        # equalled ac_input_voltage (1314) and moved with it when the grid
+        # voltage changed. The real AC output is 1431.
+        self.assertEqual(self._field("ac_output_voltage").address, 1431)
+        self.assertFalse(any(f.address == 1511 for f in self.device.fields))
+
     def test_slow_selects_declare_verification_delay(self):
         for name in SLOW_SELECTS:
             with self.subTest(field=name):

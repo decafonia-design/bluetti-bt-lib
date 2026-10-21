@@ -28,6 +28,10 @@ class AC300(BaseDeviceV1):
                 DecimalField(FieldName.PV_S1_VOLTAGE, 86, 1),
                 DecimalField(FieldName.PV_S1_POWER, 87, 1, 10),
                 DecimalField(FieldName.PV_S1_CURRENT, 88, 2, 10),
+                # How many packs are installed. The reader polls it before the
+                # pack walk and uses it to stop early, but it does not say
+                # which slots are occupied, so it cannot pick them out.
+                UIntField(FieldName.PACK_NUM, 96),
                 SelectField(FieldName.CTRL_UPS_MODE, 3001, UpsMode),
                 BoolField(FieldName.CTRL_SPLIT_PHASE, 3004),
                 EnumField(FieldName.CTRL_SPLIT_PHASE_MODE, 3005, SplitPhaseMode),
@@ -39,29 +43,33 @@ class AC300(BaseDeviceV1):
                     FieldName.BATTERY_SOC_RANGE_START,
                     3015,
                     1,
-                    0,
-                    100,
                     5,
+                    100,
+                    1,
                     verification_delay=2.0,
                 ),
                 NumberField(
                     FieldName.BATTERY_SOC_RANGE_END,
                     3016,
                     1,
-                    0,
-                    100,
                     5,
+                    100,
+                    1,
                     verification_delay=2.0,
                 ),
                 # SelectField(FieldName.CTRL_DISPLAY_TIMEOUT, 3061, DisplayMode),
             ],
             [
-                # Only the per-pack SOC is useful. The pack selector write is
-                # register 3006 (BaseDeviceV1.get_pack_selector), independent of
-                # these read fields, so the read-only PACK_SELECTED, pack voltage
-                # and 16 per-pack cell voltages are dropped to avoid a pile of
-                # near-useless per-pack entities.
+                # Per-pack readings, each selected by the write to 3006
+                # (BaseDeviceV1.get_pack_selector). The read-only PACK_SELECTED
+                # and the 16 per-pack cell voltages stay off the profile: the
+                # selector write is independent of these fields, and sixteen
+                # entities per pack is more noise than it is worth.
+                DecimalField(FieldName.PACK_VOLTAGE, 98, 2),
                 UIntField(FieldName.PACK_BATTERY_SOC, 99),
             ],
+            # Every slot the tower can hold. The reader walks all of them and
+            # drops the ones that answer with nothing, because register 96
+            # counts packs without saying which slots they sit in.
             max_packs=4,
         )

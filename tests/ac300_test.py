@@ -8,10 +8,13 @@ class TestAC300(unittest.TestCase):
     def setUp(self):
         self.device = AC300()
 
-    def test_pack_fields_trimmed_to_soc(self):
-        # Only the per-pack SOC should remain; the read-only selected,
-        # voltage and 16 cell-voltage fields are dropped.
-        self.assertEqual([f.name for f in self.device.pack_fields], ["battery_soc"])
+    def test_pack_fields_trimmed_to_voltage_and_soc(self):
+        # The per-pack voltage and SOC stay; the read-only selected flag and
+        # the 16 cell-voltage fields are dropped.
+        self.assertEqual(
+            [f.name for f in self.device.pack_fields], ["voltage", "battery_soc"]
+        )
+        self.assertEqual([f.address for f in self.device.pack_fields], [98, 99])
         self.assertEqual(self.device.max_packs, 4)
 
     def test_power_generation_reads_register_41(self):
@@ -24,6 +27,21 @@ class TestAC300(unittest.TestCase):
             f for f in self.device.fields if f.name == "power_generation"
         )
         self.assertEqual(gen.address, 41)
+
+    def test_polling_blocks(self):
+        # One request per field put the AC300 at 28 reads plus two per pack
+        # slot, which is most of a poll cycle on the radio. Neighbouring
+        # main registers are read together instead; the pack reads stay as
+        # they were.
+        blocks = self.device.get_polling_registers()
+        self.assertEqual(len(blocks), 9)
+
+        pack_blocks = self.device.get_pack_polling_registers()
+        self.assertEqual(len(pack_blocks), 2)
+        self.assertEqual(pack_blocks[0].starting_address, 98)
+        self.assertEqual(pack_blocks[0].quantity, 1)
+        self.assertEqual(pack_blocks[1].starting_address, 99)
+        self.assertEqual(pack_blocks[1].quantity, 1)
 
     def test_soc_range_slow_verification_delay(self):
         # The SOC range thresholds are slow to reflect in their register,
@@ -44,8 +62,8 @@ class TestAC300(unittest.TestCase):
         self.assertIsInstance(end, NumberField)
         self.assertTrue(start.is_writeable())
         self.assertTrue(end.is_writeable())
-        self.assertEqual(start.step, 5)
-        self.assertEqual(end.step, 5)
+        self.assertEqual(start.step, 1)
+        self.assertEqual(end.step, 1)
 
         self.assertEqual(self.device.build_write_command("soc_range_start", 30).value, 30)
         self.assertEqual(self.device.build_write_command("soc_range_end", 90).value, 90)

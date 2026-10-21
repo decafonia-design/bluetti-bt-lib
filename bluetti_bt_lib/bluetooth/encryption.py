@@ -197,6 +197,11 @@ class BluettiEncryption:
     # The signing key for the key exchange is well-known
     peer_pubkey: bytes | None = None
 
+    # Our side of the exchange. Kept for the whole exchange so a repeated
+    # peer pubkey cannot leave the two ends with different secrets.
+    my_pubkey: ec.EllipticCurvePublicKey | None = None
+    my_privkey: ec.EllipticCurvePrivateKey | None = None
+
     @property
     def is_ready_for_commands(self) -> bool:
         return self.secure_aes_key is not None and self.peer_pubkey is not None
@@ -251,8 +256,8 @@ class BluettiEncryption:
         static_key = bytes.fromhex(LOCAL_AES_KEY)
         self.unsecure_aes_key = hexxor(self.unsecure_aes_iv, static_key)
 
-        _LOGGER.info("Unsecure iv  " + self.unsecure_aes_iv.hex())
-        _LOGGER.info("Unsecure key " + self.unsecure_aes_key.hex())
+        # Never log key material: the logs end up in bug reports and backups.
+        _LOGGER.debug("Derived the unsecure key")
 
         body = bytes.fromhex("0204") + self.unsecure_aes_iv[8:12]
         return b"".join([KEX_MAGIC, body, hexsum(body, 2)])
@@ -260,10 +265,20 @@ class BluettiEncryption:
     def msg_peer_pubkey(self, message: Message) -> bytes | None:
         _LOGGER.debug("Received peer pubkey, checking signature")
         data = verify_and_extract_signed_data(message.data, self.unsecure_aes_iv)
-        self.peer_pubkey = pubkey_from_bytes(data)
+        peer_pubkey = pubkey_from_bytes(data)
 
-        _LOGGER.debug("Generating a local keypair")
-        self.my_pubkey, self.my_privkey = generate_keypair()
+        if peer_pubkey == self.peer_pubkey and self.my_privkey is not None:
+            # Stations retry the pubkey until they see our answer, and some
+            # deliver every frame several times. Making a new keypair per retry
+            # means the peer shares a secret with a key we threw away: the
+            # handshake is confirmed on both sides and every command after it is
+            # unreadable, so the device simply stops answering.
+            _LOGGER.debug("Peer repeated its pubkey, reusing the local keypair")
+        else:
+            self.peer_pubkey = peer_pubkey
+            _LOGGER.debug("Generating a local keypair")
+            self.my_pubkey, self.my_privkey = generate_keypair()
+
         my_pubkey_bytes = pubkey_to_bytes(self.my_pubkey)
 
         _LOGGER.debug("Signing the local pubkey")
@@ -284,9 +299,11 @@ class BluettiEncryption:
             raise ValueError("Unexpected message length")
         if message.data[0] != 0:
             raise ValueError("Key acceptance response is not 0")
+        if self.my_privkey is None:
+            raise ValueError("No local keypair to calculate a shared secret with")
 
         self.secure_aes_key = self.my_privkey.exchange(ec.ECDH(), self.peer_pubkey)
-        _LOGGER.info("Secure key   " + self.secure_aes_key.hex())
+        _LOGGER.debug("Derived the secure key")
 
     def getKeyIv(self):
         return (
@@ -298,3 +315,10 @@ class BluettiEncryption:
     def reset(self):
         self.peer_pubkey = None
         self.secure_aes_key = None
+        self.my_pubkey = None
+        self.my_privkey = None
+        # Both are derived from the peer's challenge and only valid for one
+        # session. A stale IV makes msg_peer_pubkey verify the peer's signature
+        # against the wrong suffix and reject a key that is actually valid.
+        self.unsecure_aes_key = None
+        self.unsecure_aes_iv = None

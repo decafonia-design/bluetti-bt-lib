@@ -17,6 +17,18 @@ class ReadableRegisters(DeviceRegister):
         # 2 byte crc
         return 2 * self.quantity + 5
 
+    def is_valid_response(self, response: bytes) -> bool:
+        """A complete, uncorrupted answer to exactly this request: length, slave address,
+        function code, byte count and CRC. A function 03 answer does not say which registers
+        it holds, so the byte count is the only check that it belongs to this request."""
+        return (
+            len(response) == self.response_size()
+            and response[0] == self.cmd[0]
+            and response[1] == self.register_action.value
+            and response[2] == 2 * self.quantity
+            and super().is_valid_response(response)
+        )
+
     def parse_response(self, response: bytes):
         return bytes(response[3:-2])
 

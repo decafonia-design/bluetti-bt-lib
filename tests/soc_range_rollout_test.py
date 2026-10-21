@@ -7,6 +7,8 @@ from bluetti_bt_lib.devices.ap300 import AP300
 from bluetti_bt_lib.devices.el100mini import EL100mini
 from bluetti_bt_lib.devices.el100v2 import EL100V2
 from bluetti_bt_lib.devices.el200v2 import EL200V2
+from bluetti_bt_lib.devices.el300 import EL300
+from bluetti_bt_lib.devices.el30v2 import EL30V2
 from bluetti_bt_lib.devices.ep2000 import EP2000
 from bluetti_bt_lib.devices.ep500 import EP500
 from bluetti_bt_lib.devices.ep500p import EP500P
@@ -14,7 +16,7 @@ from bluetti_bt_lib.devices.ep600 import EP600
 from bluetti_bt_lib.fields import NumberField
 
 # Device class -> the SOC range register pair that device actually uses.
-# The control mechanism (writable NumberField, 0-100, slow verification)
+# The control mechanism (writable NumberField, 5-100, slow verification)
 # is shared; the register locations stay device specific.
 SOC_RANGE_REGISTERS = {
     AC300: (3015, 3016),
@@ -24,8 +26,10 @@ SOC_RANGE_REGISTERS = {
     EP500P: (3015, 3016),
     AP300: (2022, 2023),
     EL100V2: (2022, 2023),
-    EL200V2: (2022, 2023),
     EL100mini: (2022, 2023),
+    EL200V2: (2022, 2023),
+    EL300: (2022, 2023),
+    EL30V2: (2022, 2023),
     EP600: (2022, 2023),
     EP2000: (2022, 2023),
 }
@@ -60,9 +64,12 @@ class TestSocRangeRollout(unittest.TestCase):
                 _, start, end = self._fields(device_cls)
                 for field in (start, end):
                     self.assertEqual(field.multiplier, 1)
-                    self.assertEqual(field.min, 0)
+                    # The app will not take a low threshold below 5%.
+                    self.assertEqual(field.min, 5)
                     self.assertEqual(field.max, 100)
-                    self.assertEqual(field.step, 5)
+                    # The registers accept whole percents, so the slider does
+                    # too rather than snapping to 5.
+                    self.assertEqual(field.step, 1)
                     self.assertEqual(field.verification_delay, 2.0)
 
     def test_write_commands_build_for_every_profile(self):
@@ -74,9 +81,9 @@ class TestSocRangeRollout(unittest.TestCase):
                 self.assertEqual((start.address, start.value), (start_addr, 30))
                 self.assertEqual((end.address, end.value), (end_addr, 90))
 
-    def test_off_step_writes_allowed_but_out_of_range_rejected(self):
-        # step is a presentation hint; the devices accept 1% increments.
-        # Only the 0-100 bounds and the non-int/bool guards reject a write.
+    def test_whole_percent_writes_but_out_of_range_is_rejected(self):
+        # The bounds are the app's: 5-100. Anything outside is refused before
+        # it reaches the air, as are bools and other non-integers.
         for device_cls in SOC_RANGE_REGISTERS:
             with self.subTest(device=device_cls.__name__):
                 device, _, _ = self._fields(device_cls)
@@ -88,6 +95,7 @@ class TestSocRangeRollout(unittest.TestCase):
                 )
                 self.assertIsNone(device.build_write_command("soc_range_start", 150))
                 self.assertIsNone(device.build_write_command("soc_range_start", -1))
+                self.assertIsNone(device.build_write_command("soc_range_start", 0))
                 self.assertIsNone(device.build_write_command("soc_range_start", True))
 
 

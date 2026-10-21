@@ -31,7 +31,7 @@ Added and mostly validated by contributors (some are moved here from the HA Inte
 |Device Name|Contributor                                                                            |total_battery_percent|dc_input_power |ac_input_power |dc_output_power|ac_output_power|
 |-----------|---------------------------------------------------------------------------------------|---------------------|---------------|---------------|---------------|---------------|
 |AC2A       |[@ruanmed](https://github.com/ruanmed)                                                 |✅                   |✅             |✅             |✅             |✅             |
-|AC50B      |[@goetzc](https://github.com/goetzc)                                                   |✅                   |❌             |✅             |✅             |✅             |
+|AC50B      |[@goetzc](https://github.com/goetzc), [@Patrick762](https://github.com/Patrick762)     |✅                   |✅             |✅             |✅             |✅             |
 |AC60       |[@mzpwr](https://github.com/mzpwr)                                                     |✅                   |✅             |✅             |✅             |✅             |
 |AC60P      |[@mzpwr](https://github.com/mzpwr)                                                     |✅                   |✅             |✅             |✅             |✅             |
 |AC70P      |[@matthewpucc](https://github.com/matthewpucc)                                         |✅                   |✅             |✅             |✅             |✅             |
@@ -46,6 +46,7 @@ Added and mostly validated by contributors (some are moved here from the HA Inte
 |EL30V2     |[@dgudim](https://github.com/dgudim)                                                   |✅                   |✅             |✅             |✅             |✅             |
 |EL100mini  |[@MadPB](https://github.com/MadPB)														|✅                   |✅             |✅             |✅             |✅             |
 |EL100V2    |[@seaburger](https://github.com/seaburger), [lesolas20](https://github.com/lesolas20)  |✅                   |✅             |✅             |✅             |✅             |
+|EL300      |[@suiciety](https://github.com/suiciety)                                               |✅                   |✅             |✅             |✅             |✅             |
 |EL200V2    |[@nlimper](https://github.com/nlimper)                                                 |✅                   |✅             |✅             |✅             |✅             |
 |EP500      |bluetti-mqtt                                                                           |✅                   |✅             |✅             |✅             |✅             |
 |EP500P     |bluetti-mqtt                                                                           |✅                   |✅             |✅             |✅             |✅             |
@@ -63,24 +64,43 @@ Added and mostly validated by contributors (some are moved here from the HA Inte
 - AC300, AP300, EL100V2, EL10 and Charger 2 — [@sidieje](https://github.com/sidieje)
 - AC200L — [@seaburger](https://github.com/seaburger)
 - EL30V2 — [@x3ccd4828](https://github.com/x3ccd4828)
+- EL300 — [@suiciety](https://github.com/suiciety)
 - Handsfree 2 — [@pablogiaccaglia](https://github.com/pablogiaccaglia)
 
-|Device Name|ctrl_ac|ctrl_dc|ctrl_ups_mode|ctrl_system_on_off|ctrl_silent_charging|
-|-----------|-------|-------|-------------|------------------|---------------------|
-|AC200L     |✅     |✅     |✅           |❌                |❌                   |
-|AC300      |✅     |✅     |✅           |❌                |❌                   |
-|AC500      |✅     |✅     |✅           |❌                |❌                   |
-|AP300      |✅     |✅     |✅           |❌                |❌                   |
-|Charger 2  |❌     |❌     |❌           |✅                |✅                   |
-|EB3A       |✅     |✅     |❌           |❌                |❌                   |
-|EL10       |✅     |✅     |❌           |❌                |❌                   |
-|EL100mini  |✅     |✅     |✅           |❌                |❌                   |
-|EL100V2    |✅     |✅     |✅           |❌                |❌                   |
-|EL200V2    |✅     |✅     |✅           |❌                |❌                   |
-|EL30V2     |✅     |✅     |❌           |❌                |❌                   |
-|EP600      |✅     |❌     |❌           |❌                |❌                   |
-|Handsfree 1|✅     |✅     |❌           |❌                |❌                   |
-|Handsfree 2|✅     |✅     |❌           |❌                |❌                   |
+|Device Name|ctrl_ac|ctrl_dc|ctrl_ups_mode|soc_range_start|soc_range_end|ctrl_eco_min_power|
+|-----------|-------|-------|-------------|---------------|---------------|------------------|
+|AC200L     |✅     |✅     |✅           |✅             |✅             |❌                |
+|AC200M     |✅     |✅     |❌           |❌             |❌             |❌                |
+|AC200PL    |✅     |✅     |❌           |❌             |❌             |❌                |
+|AC300      |✅     |✅     |✅           |✅             |✅             |❌                |
+|AC500      |✅     |✅     |✅           |✅             |✅             |❌                |
+|AP300      |✅     |✅     |✅           |✅             |✅             |✅                |
+|EB3A       |✅     |✅     |❌           |❌             |❌             |❌                |
+|EL10       |✅     |✅     |❌           |❌             |❌             |✅                |
+|EL100mini  |✅     |✅     |✅           |✅             |✅             |✅                |
+|EL100V2    |✅     |✅     |✅           |✅             |✅             |✅                |
+|EL200V2    |✅     |✅     |✅           |✅             |✅             |❌                |
+|EL30V2     |✅     |✅     |✅           |✅             |✅             |❌                |
+|EL300      |✅     |✅     |✅           |✅             |✅             |❌                |
+|EP500      |✅     |✅     |✅           |✅             |✅             |❌                |
+|EP500P     |✅     |✅     |✅           |✅             |✅             |❌                |
+|EP600      |✅     |❌     |❌           |✅             |✅             |❌                |
+|Handsfree 1|✅     |✅     |❌           |❌             |❌             |❌                |
+|Handsfree 2|✅     |✅     |❌           |❌             |❌             |❌                |
+
+The AC200M, AC200PL, EP500 and EP500P rows come from their register maps, but their controls have not been tested through this library yet.
+
+The eco auto-off thresholds (registers 2016 and 2019) are readable on most
+Elite portables, but they are only writable where an owner has confirmed the
+Bluetti app offers them, and the ranges differ per model: 5-20 W on DC and
+10-40 W on AC for the AP300, EL100 mini and EL100 V2, and 5-10 W / 15-30 W on
+the EL10.
+
+The Charger 2 carries a different set of switches, so it gets its own table:
+
+|Device Name|ctrl_system_on_off|ctrl_silent_charging|
+|-----------|------------------|---------------------|
+|Charger 2  |✅                |✅                   |
 
 ## Installation
 

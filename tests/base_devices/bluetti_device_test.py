@@ -1,13 +1,16 @@
 from enum import Enum
+import struct
 import unittest
 from bluetti_bt_lib.base_devices import BluettiDevice
 from bluetti_bt_lib.fields import (
     BoolField,
     BoolFieldNonZero,
+    DecimalField,
     EnumField,
     SelectField,
     StringField,
     SerialNumberField,
+    UIntField,
     FieldName,
     SwitchField,
 )
@@ -146,6 +149,91 @@ class TestBluettiDevice(unittest.TestCase):
 
         bool_fields = device.get_bool_fields()
         self.assertEqual(len(bool_fields), 2)
+
+    def test_coalesces_nearby_fields_into_one_block(self):
+        # Reading one field per request costs a round trip each. Fields that
+        # sit within the gap limit are covered by a single read instead.
+        fields = [
+            UIntField(FieldName.AC_OUTPUT_POWER, 38),
+            UIntField(FieldName.DC_OUTPUT_POWER, 39),
+            UIntField(FieldName.BATTERY_SOC, 43, min=0, max=100),
+        ]
+
+        device = BluettiDevice(fields=fields)
+
+        blocks = device.get_polling_registers()
+        self.assertEqual(len(blocks), 1)
+        self.assertEqual(blocks[0].starting_address, 38)
+        self.assertEqual(blocks[0].quantity, 6)
+
+        # Every field is inside a block that gets read, and the reply is
+        # sliced by offset, so the values still land on the right field.
+        raw = struct.pack("!HHHHHH", 500, 300, 0, 0, 0, 80)
+        parsed = device.parse(starting_address=38, data=raw)
+        self.assertEqual(parsed[FieldName.AC_OUTPUT_POWER.value], 500)
+        self.assertEqual(parsed[FieldName.DC_OUTPUT_POWER.value], 300)
+        self.assertEqual(parsed[FieldName.BATTERY_SOC.value], 80)
+
+    def test_distant_fields_stay_separate(self):
+        fields = [
+            UIntField(FieldName.AC_OUTPUT_POWER, 38),
+            UIntField(FieldName.DC_OUTPUT_POWER, 39),
+            UIntField(FieldName.BATTERY_SOC, 70, min=0, max=100),
+        ]
+
+        device = BluettiDevice(fields=fields)
+
+        blocks = device.get_polling_registers()
+        self.assertEqual(len(blocks), 2)
+        self.assertEqual(blocks[0].quantity, 2)
+        self.assertEqual(blocks[1].starting_address, 70)
+
+    def test_block_never_grows_past_the_limit(self):
+        fields = [
+            UIntField(FieldName.AC_OUTPUT_POWER, 38),
+            UIntField(FieldName.DC_OUTPUT_POWER, 39),
+            UIntField(FieldName.BATTERY_SOC, 48, min=0, max=100),
+        ]
+
+        device = BluettiDevice(fields=fields)
+
+        blocks = device.get_polling_registers()
+        self.assertEqual(len(blocks), 2)
+        self.assertEqual(blocks[0].quantity, 2)
+        self.assertEqual(blocks[1].starting_address, 48)
+
+    def test_oversized_field_keeps_its_own_block(self):
+        # A field wider than the block limit cannot fit inside it, and the
+        # limit stops anything else from joining it.
+        fields = [
+            StringField(FieldName.DEVICE_TYPE, 100, 12),
+            BoolField(FieldName.CTRL_AC, 113),
+        ]
+
+        device = BluettiDevice(fields=fields)
+
+        blocks = device.get_polling_registers()
+        self.assertEqual(len(blocks), 2)
+        self.assertEqual(blocks[0].starting_address, 100)
+        self.assertEqual(blocks[0].quantity, 12)
+        self.assertEqual(blocks[1].starting_address, 113)
+
+    def test_pack_fields_keep_one_request_each(self):
+        pack_fields = [
+            DecimalField(FieldName.PACK_VOLTAGE, 98, 2),
+            UIntField(FieldName.PACK_BATTERY_SOC, 99),
+        ]
+
+        device = BluettiDevice(
+            fields=[], pack_fields=pack_fields, max_packs=4
+        )
+
+        blocks = device.get_pack_polling_registers()
+        self.assertEqual(len(blocks), 2)
+        self.assertEqual(blocks[0].starting_address, 98)
+        self.assertEqual(blocks[0].quantity, 1)
+        self.assertEqual(blocks[1].starting_address, 99)
+        self.assertEqual(blocks[1].quantity, 1)
 
     def test_switch_fields(self):
         fields = [

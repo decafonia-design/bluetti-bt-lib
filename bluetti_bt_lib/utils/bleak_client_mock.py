@@ -109,19 +109,35 @@ class BleakClientMock:
             # Nobody is listening on the notify characteristic
             return
 
-        cmd = struct.unpack_from("!HHHH", data)
-        content = await self._get_register(cmd[1], cmd[2])
+        request = bytes(data)
+        slave, function = request[0], request[1]
+
+        if function == 3:
+            address, quantity = struct.unpack_from("!HH", request, 2)
+            body = self._get_register(address, quantity)
+            content = self._read_frame(slave, body)
+        elif function == 6:
+            # A function 06 slave answers by echoing the request back.
+            content = bytearray(request)
+        else:
+            return
+
         await self._callback(char_specifier, content)
 
-    async def _get_register(self, addr: int, size: int):
-        data = self._bytemap[(addr * 2) : (addr * 2 + size * 2)]
-        response = bytearray(len(data) + 4)
-        response[0] = 0
-        response[1] = 0
-        response[2] = 0
-        response[3:-2] = data
-        struct.pack_into("<H", response, -2, modbus_crc(response[:-2]))
-        return response
+    def _read_frame(self, slave: int, body: bytes) -> bytearray:
+        """Wrap register contents in a function 03 answer (header, byte count, CRC)."""
+        frame = bytearray(len(body) + 5)
+        frame[0] = slave
+        frame[1] = 3
+        frame[2] = len(body)
+        frame[3:-2] = body
+        struct.pack_into("<H", frame, -2, modbus_crc(frame[:-2]))
+        return frame
+
+    def _get_register(self, addr: int, size: int) -> bytes:
+        """The register contents a read of size words at addr returns."""
+        real = addr * 2
+        return bytes(self._bytemap[real : real + size * 2])
 
 
 class ClientMockNoEncryption(BleakClientMock):

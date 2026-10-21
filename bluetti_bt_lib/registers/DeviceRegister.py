@@ -44,6 +44,16 @@ class DeviceRegister:
         crc_bytes = crc.to_bytes(2, byteorder="little")
         return response[-2:] == crc_bytes
 
+    def is_valid_exception(self, response: bytes) -> bool:
+        """A complete MODBUS exception answer to this request (5 bytes: slave address,
+        function code + 0x80, exception code, CRC)"""
+        return (
+            len(response) == 5
+            and response[0] == self.cmd[0]
+            and self.is_exception_response(response)
+            and DeviceRegister.is_valid_response(self, response)
+        )
+
     def parse_response(self, response: bytes):
         """Returns the raw body of the response"""
         raise NotImplementedError()
