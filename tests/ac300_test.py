@@ -28,6 +28,18 @@ class TestAC300(unittest.TestCase):
         )
         self.assertEqual(gen.address, 41)
 
+    def test_polling_blocks(self):
+        # One request per field put the AC300 at 28 reads plus two per pack
+        # slot, which is most of a poll cycle on the radio. Neighbouring
+        # registers are read together instead.
+        blocks = self.device.get_polling_registers()
+        self.assertEqual(len(blocks), 9)
+
+        pack_blocks = self.device.get_pack_polling_registers()
+        self.assertEqual(len(pack_blocks), 1)
+        self.assertEqual(pack_blocks[0].starting_address, 98)
+        self.assertEqual(pack_blocks[0].quantity, 2)
+
     def test_soc_range_slow_verification_delay(self):
         # The SOC range thresholds are slow to reflect in their register,
         # so they declare the longer write-verification delay.

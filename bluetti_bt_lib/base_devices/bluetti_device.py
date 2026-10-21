@@ -3,6 +3,42 @@ from typing import Any, List
 from ..registers import ReadableRegisters, WriteableRegister
 from ..fields import DeviceField, BoolField, BoolFieldNonZero, SwitchField, SelectField, NumberField
 
+# Asking for one field at a time costs a radio round trip each, and a station
+# with 28 of them spends most of a poll cycle waiting for answers. Fields that
+# sit near each other are read as one block instead: the answer carries the
+# whole range and parse() picks the fields out by offset.
+#
+# The block limit is the 10 register chunk that the full range scan
+# (bluetti_readall) already sends, which is a request size stations are known
+# to answer. The gap limit says how many unread registers it is worth carrying
+# along to save a round trip.
+MAX_POLL_BLOCK = 10
+MAX_POLL_GAP = 4
+
+
+def _polling_blocks(fields: List[DeviceField]) -> List[ReadableRegisters]:
+    """Cover the fields with as few read requests as those two limits allow."""
+    blocks: List[ReadableRegisters] = []
+
+    for field in fields:
+        end = field.address + field.size - 1
+
+        if blocks:
+            start = blocks[-1].starting_address
+            covered_end = start + blocks[-1].quantity - 1
+            block_end = max(end, covered_end)
+
+            if (
+                field.address - covered_end <= MAX_POLL_GAP
+                and block_end - start + 1 <= MAX_POLL_BLOCK
+            ):
+                blocks[-1] = ReadableRegisters(start, block_end - start + 1)
+                continue
+
+        blocks.append(ReadableRegisters(field.address, field.size))
+
+    return blocks
+
 
 class BluettiDevice:
     def __init__(
@@ -18,21 +54,14 @@ class BluettiDevice:
         self.fields.sort(key=lambda f: f.address)
         self.pack_fields.sort(key=lambda f: f.address)
 
-        self.polling_registers: List[ReadableRegisters] = []
+        self.polling_registers: List[ReadableRegisters] = _polling_blocks(self.fields)
         self.pack_polling_registers: List[ReadableRegisters] = []
-
-        for f in self.fields:
-            group = ReadableRegisters(f.address, f.size)
-            self.polling_registers.append(group)
 
         # Check if we even have battery pack fields defined
         if len(self.pack_fields) == 0 or max_packs == 0:
             return
 
-        # Optimize amount of registers to separately request
-        for f in self.pack_fields:
-            group = ReadableRegisters(f.address, f.size)
-            self.pack_polling_registers.append(group)
+        self.pack_polling_registers = _polling_blocks(self.pack_fields)
 
     def get_polling_registers(self) -> List[ReadableRegisters]:
         """Returns all registers required to poll device fields"""
