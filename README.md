@@ -79,9 +79,9 @@ Added and mostly validated by contributors (some are moved here from the HA Inte
 |EL10       |✅     |✅     |❌           |❌             |❌             |✅                |
 |EL100mini  |✅     |✅     |✅           |✅             |✅             |✅                |
 |EL100V2    |✅     |✅     |✅           |✅             |✅             |✅                |
-|EL200V2    |✅     |✅     |✅           |✅             |✅             |❌                |
-|EL30V2     |✅     |✅     |✅           |✅             |✅             |❌                |
-|EL300      |✅     |✅     |✅           |✅             |✅             |❌                |
+|EL200V2    |✅     |✅     |✅           |✅             |✅             |✅                |
+|EL30V2     |✅     |✅     |✅           |✅             |✅             |✅                |
+|EL300      |✅     |✅     |✅           |✅             |✅             |✅                |
 |EP500      |✅     |✅     |✅           |✅             |✅             |❌                |
 |EP500P     |✅     |✅     |✅           |✅             |✅             |❌                |
 |EP600      |✅     |❌     |❌           |✅             |✅             |❌                |
@@ -93,8 +93,8 @@ The AC200M, AC200PL, EP500 and EP500P rows come from their register maps, but th
 The eco auto-off thresholds (registers 2016 and 2019) are readable on most
 Elite portables, but they are only writable where an owner has confirmed the
 Bluetti app offers them, and the ranges differ per model: 5-20 W on DC and
-10-40 W on AC for the AP300, EL100 mini and EL100 V2, and 5-10 W / 15-30 W on
-the EL10.
+10-40 W on AC for the AP300, EL100 mini, EL100 V2, EL30 V2, EL200 V2 and
+EL300, and 5-10 W / 15-30 W on the EL10.
 
 The Charger 2 carries a different set of switches, so it gets its own table:
 
