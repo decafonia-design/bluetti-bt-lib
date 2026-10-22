@@ -221,6 +221,33 @@ Example:
 bluetti-write -m 00:00:00:00:00:00 -t EB3A --on on ctrl_ac
 ```
 
+### Probe a station that keeps dropping reads
+
+`tools/link_health_probe.py` is for a station that answers some polls and not
+others. It runs the same read cycles Home Assistant runs, and reports for every
+cycle that was cut short which request went unanswered, how many answered before
+it, and what the station sent about the request it skipped:
+
+```bash
+usage: tools/link_health_probe.py [-h] -m MAC -t TYPE [--enc] [-n ROUNDS]
+                                  [--gap GAP] [--packs-every PACKS_EVERY]
+                                  [--blocks] [--per-block PER_BLOCK] [-v]
+```
+
+The reader sorts a missing answer into one of three kinds, which is the part that
+tells the causes apart:
+
+| kind | what happened | usually means |
+| --- | --- | --- |
+| `silent` | nothing at all came back | the station is busy, or has quietly dropped the link |
+| `partial` | it started answering and the rest never arrived | a frame lost on the way up |
+| `mismatch` | a whole frame came back that answers a different request | a late answer to a request that was already given up on |
+
+`--blocks` asks for each poll block on its own instead: a block that answers fine
+alone but fails in the middle of a cycle is a timing problem, a block that fails
+both ways is that register. `--packs-every N` walks the pack slots every Nth
+round, which is how a device with battery packs is tested with and without them.
+
 ## Adding fields
 
 To add new fields, you can use the `bluetti-detect` command to first find out which version of iot protocol is used and if it uses encryption.

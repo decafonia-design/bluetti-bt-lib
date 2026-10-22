@@ -1,5 +1,7 @@
 import asyncio
 import logging
+import time
+from dataclasses import dataclass
 from decimal import Decimal
 
 import async_timeout
@@ -34,6 +36,14 @@ RESPONSE_TIMEOUT_SECONDS = 5
 # takes a second or two.
 HANDSHAKE_TIMEOUT_SECONDS = 20
 
+# An answer this late is worth remembering when a later request fails: a station
+# that is about to stop answering usually starts by answering slowly.
+SLOW_REQUEST_SECONDS = 1.5
+
+# How much of an unusable answer to quote in the log. Enough to tell a late
+# reply to an earlier request from noise.
+RX_SAMPLE_BYTES = 12
+
 
 class ResponseTimeout(Exception):
     """No valid answer to a request arrived in time.
@@ -41,11 +51,49 @@ class ResponseTimeout(Exception):
     The link is left in an unknown state: an answer may still be on its way and
     would otherwise be taken for the next request, so the caller must stop using
     this connection instead of sending another command.
+
+    ``detail`` says what the station did send, which is the difference between a
+    link that went quiet and one that answered something unusable.
     """
 
-    def __init__(self, registers: DeviceRegister):
-        super().__init__(f"no valid response to {registers}")
+    def __init__(self, registers: DeviceRegister, detail: str = ""):
+        message = f"no valid response to {registers}"
+        if detail:
+            message = f"{message} ({detail})"
+        super().__init__(message)
         self.registers = registers
+        self.detail = detail
+
+
+@dataclass
+class LinkStats:
+    """What the last read cycle did on the wire.
+
+    A consumer such as Home Assistant only ever sees the warning a failed cycle
+    leaves behind, so this is where the evidence about *why* it failed is kept:
+    which request was cut short, how many answered before it, how slow the
+    slowest answer of the cycle was, and what the station actually sent for the
+    request it left unanswered.
+    """
+
+    requests: int = 0
+    """Requests sent in this cycle, counting one that went unanswered."""
+    answered: int = 0
+    """Requests in this cycle that got a valid answer."""
+    slowest: float = 0.0
+    """Longest wait for a valid answer in this cycle, in seconds."""
+    slowest_registers: str = ""
+    """The request that took that long to answer."""
+    aborted: str = ""
+    """The request that went unanswered, when the cycle was cut short."""
+    failure: str = ""
+    """How it went unanswered: silent, partial or mismatch."""
+    received: int = 0
+    """Bytes the station sent about the request it did not answer."""
+    sample: str = ""
+    """The start of those bytes, hex, to tell a late answer from noise."""
+    abort_streak: int = 0
+    """Cycles in a row that had an abort, not counting the one in progress."""
 
 
 class DeviceReaderConfig:
@@ -102,6 +150,17 @@ class DeviceReader:
         """Whether this connection has answered a request yet. A station that
         is still waking tends to miss the first one, so that miss is logged
         quietly; after the link has proven itself a missing answer is news."""
+        self.link_stats = LinkStats()
+        """What the last read cycle did on the wire; see LinkStats."""
+        self._rx_bytes = 0
+        self._rx_frames = 0
+        self._rx_unexpected = bytearray()
+        self._cycle_aborted = False
+        """MODBUS bytes and notification frames seen about the request in
+        flight, so a timeout can say whether the station stayed quiet or
+        answered something that was not usable. _rx_unexpected keeps the start
+        of a frame that was discarded, which is otherwise thrown away before
+        the timeout can describe it."""
 
     async def connect(self) -> bool:
         """Establish a persistent connection to the device.
@@ -517,6 +576,8 @@ class DeviceReader:
                         await self._abandon_handshake()
                         return None
 
+                    self._begin_cycle()
+
                     for register in registers:
                         body = register.parse_response(
                             await self._async_send_command(register)
@@ -638,7 +699,7 @@ class DeviceReader:
                 # this request may still arrive and would be read as the answer
                 # to the next one, which is how a register ends up holding the
                 # value of a different register.
-                self._log_timeout("Read aborted: %s", err)
+                self._log_timeout("Read aborted: %s%s", err, self._cycle_note())
                 await self._resync_link()
                 return None
             except TimeoutError:
@@ -699,6 +760,8 @@ class DeviceReader:
                     await self._abandon_handshake()
                     return None
 
+                self._begin_cycle()
+
                 for register in only_registers:
                     body = register.parse_response(
                         await self._async_send_command(register)
@@ -717,7 +780,7 @@ class DeviceReader:
             # Same reasoning as read(): a write verification read-back that
             # gets no valid answer must not be followed by another command on
             # a link that may still be carrying a late answer.
-            self._log_timeout("Read aborted: %s", err)
+            self._log_timeout("Read aborted: %s%s", err, self._cycle_note())
             await self._resync_link()
             return None
         except TimeoutError:
@@ -749,6 +812,98 @@ class DeviceReader:
             logging.WARNING if self._answered else logging.DEBUG, message, *args
         )
 
+    def _begin_cycle(self) -> None:
+        """Start counting a new read cycle.
+
+        The abort streak carries over: a station that fails the same way cycle
+        after cycle is a different fault from one that drops an occasional
+        request, and a single log line cannot tell them apart.
+        """
+        stats = self.link_stats
+        stats.abort_streak = stats.abort_streak + 1 if self._cycle_aborted else 0
+        self._cycle_aborted = False
+        stats.requests = 0
+        stats.answered = 0
+        stats.slowest = 0.0
+        stats.slowest_registers = ""
+        stats.aborted = ""
+        stats.failure = ""
+        stats.received = 0
+        stats.sample = ""
+
+    def _record_answer(self, registers: DeviceRegister, elapsed: float) -> None:
+        """Note a request that was answered, and how long it took."""
+        stats = self.link_stats
+        stats.answered += 1
+
+        if elapsed > stats.slowest:
+            stats.slowest = elapsed
+            stats.slowest_registers = str(registers)
+
+        if elapsed >= SLOW_REQUEST_SECONDS:
+            # Kept for when a later request fails: a station that is about to
+            # go quiet usually answers late first.
+            self.logger.debug("Slow answer to %s: %.1fs", registers, elapsed)
+
+    def _rx_sample(self) -> str:
+        """The start of whatever arrived about the request in flight, hex.
+
+        A frame that was recognised as an answer to something else is thrown
+        away as soon as it is spotted, so fall back to the copy kept for it.
+        """
+        pending = bytes(self.notify_response[:RX_SAMPLE_BYTES])
+        if pending:
+            return pending.hex()
+        return bytes(self._rx_unexpected[:RX_SAMPLE_BYTES]).hex()
+
+    def _rx_state(self, registers: DeviceRegister) -> tuple[str, str]:
+        """Sort out what the station sent about a request it did not answer.
+
+        Returns the kind of fault and a phrase for the log. "No valid response"
+        on its own covers three different faults that point at different
+        causes: nothing at all is a station that is busy or has quietly dropped
+        the link, too few bytes is an answer lost on the way up, and a full
+        frame that fits no pending request is a late answer to a request that
+        was already given up on.
+        """
+        expected = registers.response_size()
+        sample = self._rx_sample()
+
+        if not self._rx_bytes:
+            return "silent", "the station sent nothing"
+
+        if self._rx_bytes < expected:
+            return (
+                "partial",
+                f"the station sent {self._rx_bytes} of {expected} bytes in "
+                f"{self._rx_frames} frame(s) then stopped ({sample})",
+            )
+
+        return (
+            "mismatch",
+            f"the station sent {self._rx_bytes} bytes that are not an answer "
+            f"to this request ({sample})",
+        )
+
+    def _cycle_note(self) -> str:
+        """Say where in the cycle a read was cut short, for the log line."""
+        stats = self.link_stats
+        if not stats.requests:
+            return ""
+
+        parts = [
+            f"request #{stats.requests} of this cycle",
+            f"{stats.answered} answered before it",
+        ]
+        if stats.slowest >= SLOW_REQUEST_SECONDS:
+            parts.append(
+                f"slowest answer {stats.slowest:.1f}s ({stats.slowest_registers})"
+            )
+        if stats.abort_streak:
+            parts.append(f"{stats.abort_streak + 1} cycles in a row with an abort")
+
+        return " [" + "; ".join(parts) + "]"
+
     async def _async_send_command(self, registers: DeviceRegister) -> bytes:
         """Send a command and return its validated response.
 
@@ -763,6 +918,11 @@ class DeviceReader:
         self.encrypted_buffer.clear()
         # Two identical answers to two different requests are legitimate.
         self.last_notification = None
+        self._rx_bytes = 0
+        self._rx_frames = 0
+        self._rx_unexpected = bytearray()
+        self.link_stats.requests += 1
+        sent_at = time.monotonic()
 
         command_bytes = bytes(registers)
 
@@ -788,6 +948,7 @@ class DeviceReader:
             self.logger.debug("Got response (%d bytes)", len(res))
 
             self._answered = True
+            self._record_answer(registers, time.monotonic() - sent_at)
 
             return cast(bytes, res)
         except BleakError:
@@ -803,13 +964,22 @@ class DeviceReader:
             # also still be on its way: keep going would hand that answer to
             # the next request, which is how a register ends up holding the
             # value of a different one. Abort the read instead.
+            kind, detail = self._rx_state(registers)
+            stats = self.link_stats
+            stats.aborted = str(registers)
+            stats.failure = kind
+            stats.received = self._rx_bytes
+            stats.sample = self._rx_sample()
+            self._cycle_aborted = True
+
             self._log_timeout(
-                "No valid response to %s within %ss (client connected: %s)",
+                "No valid response to %s within %ss (client connected: %s): %s",
                 registers,
                 RESPONSE_TIMEOUT_SECONDS,
                 self.client.is_connected if self.client else False,
+                detail,
             )
-            raise ResponseTimeout(registers) from None
+            raise ResponseTimeout(registers, detail) from None
         finally:
             # Answers that arrive from now on are not for a pending request.
             self.notify_future = None
@@ -999,6 +1169,12 @@ class DeviceReader:
         # Save data
         self.notify_response.extend(data)
 
+        # Keep track of what the station sends while a request is in flight, so
+        # a request that goes unanswered can say what did arrive about it.
+        if self.notify_future is not None and not self.notify_future.done():
+            self._rx_bytes += len(data)
+            self._rx_frames += 1
+
         # The connection is persistent, so notifications can arrive outside of
         # a pending command (leftovers, write acknowledgements, ...). Only the
         # future of the running command may be resolved here.
@@ -1048,4 +1224,5 @@ class DeviceReader:
             registers,
             response.hex(),
         )
+        self._rx_unexpected = bytearray(response[:RX_SAMPLE_BYTES])
         self.notify_response = bytearray()

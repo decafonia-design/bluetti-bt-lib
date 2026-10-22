@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import struct
 import unittest
 from unittest.mock import patch
 
@@ -27,6 +28,67 @@ class DeafMock(ClientMockNoEncryption):
             return
 
         await super().write_gatt_char(char_specifier, data, response)
+
+
+class FlakyMock(ClientMockNoEncryption):
+    """Answers every request, but the ones numbered in late_at arrive slowly.
+
+    A station that is about to go quiet usually answers late first, and the
+    reader is meant to notice that.
+    """
+
+    def __init__(self, late_at: set[int], delay: float) -> None:
+        super().__init__()
+        self.late_at = late_at
+        self.delay = delay
+        self.requests = 0
+
+    async def write_gatt_char(self, char_specifier, data, response=None) -> None:
+        self.requests += 1
+        if self.requests in self.late_at:
+            await asyncio.sleep(self.delay)
+
+        await super().write_gatt_char(char_specifier, data, response)
+
+
+class TruncatedMock(ClientMockNoEncryption):
+    """Answers one request with a frame that stops short of its CRC."""
+
+    #: which request to mangle, set by subclasses that answer differently
+    truncate = True
+
+    def __init__(self, at: int) -> None:
+        super().__init__()
+        self.at = at
+        self.requests = 0
+
+    async def write_gatt_char(self, char_specifier, data, response=None) -> None:
+        self.requests += 1
+        if self.requests != self.at or self._callback is None:
+            await super().write_gatt_char(char_specifier, data, response)
+            return
+
+        request = bytes(data)
+        address, quantity = struct.unpack_from("!HH", request, 2)
+
+        if self.truncate:
+            # The station started answering and the rest never arrived.
+            frame = self._frame(request[0], address, quantity)
+            await self._callback(char_specifier, frame[: len(frame) - 3])
+            return
+
+        # A valid frame, just not one that answers this request: it covers more
+        # registers than were asked for, so the reader discards it.
+        await self._callback(char_specifier, self._frame(request[0], address, quantity + 4))
+
+    def _frame(self, slave: int, address: int, quantity: int) -> bytearray:
+        return self._read_frame(slave, self._get_register(address, quantity))
+
+
+class WrongAnswerMock(TruncatedMock):
+    """Answers one request with a complete frame for a different register range."""
+
+    truncate = False
 
 
 class TestTimeoutLogging(unittest.IsolatedAsyncioTestCase):
@@ -73,6 +135,110 @@ class TestTimeoutLogging(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(data)
         self.assertEqual(self.levels(logs, "No valid response"), [logging.WARNING])
         self.assertEqual(self.levels(logs, "Read aborted"), [logging.WARNING])
+
+    async def test_a_station_that_sends_nothing_says_so(self):
+        # "No valid response" used to be the whole story, which left a station
+        # that went quiet indistinguishable from one that answered garbage.
+        reader = self.make_reader(DeafMock({2}))
+
+        with patch.object(
+            device_reader, "RESPONSE_TIMEOUT_SECONDS", FAST_TIMEOUT_SECONDS
+        ):
+            with self.assertLogs(reader.logger, level="DEBUG") as logs:
+                await reader.read()
+
+        self.assertIn("the station sent nothing", self.joined(logs))
+        self.assertEqual(reader.link_stats.failure, "silent")
+        self.assertEqual(reader.link_stats.received, 0)
+        self.assertIn("starting_address=10", reader.link_stats.aborted)
+
+    async def test_an_answer_that_stops_short_is_reported_as_partial(self):
+        reader = self.make_reader(TruncatedMock(2))
+
+        with patch.object(
+            device_reader, "RESPONSE_TIMEOUT_SECONDS", FAST_TIMEOUT_SECONDS
+        ):
+            with self.assertLogs(reader.logger, level="DEBUG") as logs:
+                await reader.read()
+
+        message = self.joined(logs)
+        self.assertEqual(reader.link_stats.failure, "partial")
+        # The second request of the cycle is the 10+6 startup block, which is
+        # answered in 17 bytes; the mock drops the last three of them.
+        self.assertEqual(reader.link_stats.received, 14)
+        self.assertIn("the station sent 14 of 17 bytes", message)
+        self.assertIn("then stopped", message)
+        self.assertTrue(reader.link_stats.sample)
+
+    async def test_an_answer_to_another_request_is_reported_as_mismatch(self):
+        reader = self.make_reader(WrongAnswerMock(2))
+
+        with patch.object(
+            device_reader, "RESPONSE_TIMEOUT_SECONDS", FAST_TIMEOUT_SECONDS
+        ):
+            with self.assertLogs(reader.logger, level="DEBUG") as logs:
+                await reader.read()
+
+        self.assertEqual(reader.link_stats.failure, "mismatch")
+        self.assertIn("are not an answer to this request", self.joined(logs))
+        # The bytes that did arrive are quoted, which is how a late answer to a
+        # request that was already given up on is told apart from noise.
+        self.assertTrue(reader.link_stats.sample)
+
+    async def test_the_abort_says_where_in_the_cycle_it_happened(self):
+        # Whether the fault follows the same position in the poll order is the
+        # difference between a register that will not answer and a link that
+        # gives up partway through a cycle.
+        reader = self.make_reader(DeafMock({2}))
+
+        with patch.object(
+            device_reader, "RESPONSE_TIMEOUT_SECONDS", FAST_TIMEOUT_SECONDS
+        ):
+            with self.assertLogs(reader.logger, level="DEBUG") as logs:
+                await reader.read()
+
+        aborted = [r.getMessage() for r in logs.records if "Read aborted" in r.getMessage()]
+        self.assertEqual(len(aborted), 1)
+        self.assertIn("request #2 of this cycle", aborted[0])
+        self.assertIn("1 answered before it", aborted[0])
+        self.assertNotIn("aborts in a row", aborted[0])
+
+    async def test_repeated_aborts_are_counted_together(self):
+        # The same fault cycle after cycle is a different problem from an
+        # occasional dropped request, and one log line cannot tell them apart.
+        reader = self.make_reader(DeafMock({2, 4}))
+
+        with patch.object(
+            device_reader, "RESPONSE_TIMEOUT_SECONDS", FAST_TIMEOUT_SECONDS
+        ):
+            with self.assertLogs(reader.logger, level="DEBUG") as logs:
+                await reader.read()
+                await reader.read()
+
+        aborted = [r.getMessage() for r in logs.records if "Read aborted" in r.getMessage()]
+        self.assertEqual(len(aborted), 2)
+        self.assertNotIn("cycles in a row", aborted[0])
+        self.assertIn("2 cycles in a row with an abort", aborted[1])
+        self.assertEqual(reader.link_stats.abort_streak, 1)
+
+    async def test_a_slow_answer_is_noticed(self):
+        # A station that is about to stop answering usually answers late first,
+        # and that is only worth knowing if the reader writes it down.
+        reader = self.make_reader(FlakyMock({1}, FAST_TIMEOUT_SECONDS / 2))
+
+        with patch.object(
+            device_reader, "RESPONSE_TIMEOUT_SECONDS", FAST_TIMEOUT_SECONDS
+        ):
+            with patch.object(device_reader, "SLOW_REQUEST_SECONDS", 0.01):
+                with self.assertLogs(reader.logger, level="DEBUG") as logs:
+                    await reader.read()
+
+        self.assertIn("Slow answer", self.joined(logs))
+        self.assertGreaterEqual(reader.link_stats.slowest, FAST_TIMEOUT_SECONDS / 2)
+        self.assertIn("starting_address=36", reader.link_stats.slowest_registers)
+
+    def joined(self, logs) -> str:
+        return "\n".join(r.getMessage() for r in logs.records)
 
 
 if __name__ == "__main__":
