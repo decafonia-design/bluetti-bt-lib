@@ -19,13 +19,16 @@ APP_VERIFIED = {
     EL100V2: (5, 20, 10, 40),
     AP300: (5, 20, 10, 40),
     EL100mini: (5, 20, 10, 40),
+    EL30V2: (5, 20, 10, 40),
+    EL200V2: (5, 20, 10, 40),
+    EL300: (5, 20, 10, 40),
     EL10: (5, 10, 15, 30),
 }
 
 # The same registers are readable on these, but no owner has confirmed their
 # app offers the settings, so they stay read-only sensors rather than a slider
 # that could write a value the station ignores.
-READ_ONLY = (EL200V2, EL300, EL30V2, AC70, AC180)
+READ_ONLY = (AC70, AC180)
 
 # The registers hold whole watts, so the sliders move in 1 W steps.
 STEP = 1
