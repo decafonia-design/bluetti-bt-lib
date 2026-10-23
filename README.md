@@ -47,7 +47,7 @@ Added and mostly validated by contributors (some are moved here from the HA Inte
 |EL100mini  |[@MadPB](https://github.com/MadPB)														|✅                   |✅             |✅             |✅             |✅             |
 |EL100V2    |[@seaburger](https://github.com/seaburger), [lesolas20](https://github.com/lesolas20)  |✅                   |✅             |✅             |✅             |✅             |
 |EL300      |[@suiciety](https://github.com/suiciety)                                               |✅                   |✅             |✅             |✅             |✅             |
-|EL200V2    |[@nlimper](https://github.com/nlimper)                                                 |✅                   |✅             |✅             |✅             |✅             |
+|Elite 200 V2|[@nlimper](https://github.com/nlimper)                                                |✅                   |✅             |✅             |✅             |✅             |
 |EP500      |bluetti-mqtt                                                                           |✅                   |✅             |✅             |✅             |✅             |
 |EP500P     |bluetti-mqtt                                                                           |✅                   |✅             |✅             |✅             |✅             |
 |EP760      |[@Apfuntimes](https://github.com/Apfuntimes)                                           |✅                   |PV             |Grid           |❌             |AC Phases      |
@@ -79,7 +79,7 @@ Added and mostly validated by contributors (some are moved here from the HA Inte
 |EL10       |✅     |✅     |❌           |❌             |❌             |✅                |
 |EL100mini  |✅     |✅     |✅           |✅             |✅             |✅                |
 |EL100V2    |✅     |✅     |✅           |✅             |✅             |✅                |
-|EL200V2    |✅     |✅     |✅           |✅             |✅             |✅                |
+|Elite 200 V2|✅    |✅     |✅           |✅             |✅             |✅                |
 |EL30V2     |✅     |✅     |✅           |✅             |✅             |✅                |
 |EL300      |✅     |✅     |✅           |✅             |✅             |✅                |
 |EP500      |✅     |✅     |✅           |✅             |✅             |❌                |
