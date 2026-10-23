@@ -47,7 +47,7 @@ Added and mostly validated by contributors (some are moved here from the HA Inte
 |EL100mini  |[@MadPB](https://github.com/MadPB)														|✅                   |✅             |✅             |✅             |✅             |
 |EL100V2    |[@seaburger](https://github.com/seaburger), [lesolas20](https://github.com/lesolas20)  |✅                   |✅             |✅             |✅             |✅             |
 |EL300      |[@suiciety](https://github.com/suiciety)                                               |✅                   |✅             |✅             |✅             |✅             |
-|EL200V2    |[@nlimper](https://github.com/nlimper)                                                 |✅                   |✅             |✅             |✅             |✅             |
+|Elite 200 V2|[@nlimper](https://github.com/nlimper)                                                |✅                   |✅             |✅             |✅             |✅             |
 |EP500      |bluetti-mqtt                                                                           |✅                   |✅             |✅             |✅             |✅             |
 |EP500P     |bluetti-mqtt                                                                           |✅                   |✅             |✅             |✅             |✅             |
 |EP760      |[@Apfuntimes](https://github.com/Apfuntimes)                                           |✅                   |PV             |Grid           |❌             |AC Phases      |
@@ -79,9 +79,9 @@ Added and mostly validated by contributors (some are moved here from the HA Inte
 |EL10       |✅     |✅     |❌           |❌             |❌             |✅                |
 |EL100mini  |✅     |✅     |✅           |✅             |✅             |✅                |
 |EL100V2    |✅     |✅     |✅           |✅             |✅             |✅                |
-|EL200V2    |✅     |✅     |✅           |✅             |✅             |❌                |
-|EL30V2     |✅     |✅     |✅           |✅             |✅             |❌                |
-|EL300      |✅     |✅     |✅           |✅             |✅             |❌                |
+|Elite 200 V2|✅    |✅     |✅           |✅             |✅             |✅                |
+|EL30V2     |✅     |✅     |✅           |✅             |✅             |✅                |
+|EL300      |✅     |✅     |✅           |✅             |✅             |✅                |
 |EP500      |✅     |✅     |✅           |✅             |✅             |❌                |
 |EP500P     |✅     |✅     |✅           |✅             |✅             |❌                |
 |EP600      |✅     |❌     |❌           |✅             |✅             |❌                |
@@ -93,8 +93,8 @@ The AC200M, AC200PL, EP500 and EP500P rows come from their register maps, but th
 The eco auto-off thresholds (registers 2016 and 2019) are readable on most
 Elite portables, but they are only writable where an owner has confirmed the
 Bluetti app offers them, and the ranges differ per model: 5-20 W on DC and
-10-40 W on AC for the AP300, EL100 mini and EL100 V2, and 5-10 W / 15-30 W on
-the EL10.
+10-40 W on AC for the AP300, EL100 mini, EL100 V2, EL30 V2, EL200 V2 and
+EL300, and 5-10 W / 15-30 W on the EL10.
 
 The Charger 2 carries a different set of switches, so it gets its own table:
 
@@ -220,6 +220,39 @@ Example:
 ```bash
 bluetti-write -m 00:00:00:00:00:00 -t EB3A --on on ctrl_ac
 ```
+
+### Probe a station that keeps dropping reads
+
+`tools/link_health_probe.py` is for a station that answers some polls and not
+others. It runs the same read cycles Home Assistant runs, and reports for every
+cycle that was cut short which request went unanswered, how many answered before
+it, and what the station sent about the request it skipped:
+
+```bash
+usage: tools/link_health_probe.py [-h] -m MAC -t TYPE [--enc] [-n ROUNDS]
+                                  [--gap GAP] [--packs-every PACKS_EVERY]
+                                  [--blocks] [--per-block PER_BLOCK] [-v]
+```
+
+The reader sorts a missing answer into one of three kinds, which is the part that
+tells the causes apart:
+
+| kind | what happened | usually means |
+| --- | --- | --- |
+| `silent` | nothing at all came back | the station is busy, or has quietly dropped the link |
+| `partial` | it started answering and the rest never arrived | a frame lost on the way up |
+| `mismatch` | a whole frame came back that answers a different request | a late answer to a request that was already given up on |
+
+`--blocks` asks for each poll block on its own instead: a block that answers fine
+alone but fails in the middle of a cycle is a timing problem, a block that fails
+both ways is that register. `--packs-every N` walks the pack slots every Nth
+round, which is how a device with battery packs is tested with and without them.
+
+A read that goes unanswered is asked for once more before the cycle is given up
+on. The second ask is only safe for reads: a late answer to the first one answers
+the same request. Writes are never sent twice. A cycle the retry saved is not
+logged as a warning at all, and the probe prints how many requests had to be
+asked twice and how many of those answered the second time.
 
 ## Adding fields
 

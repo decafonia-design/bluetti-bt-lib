@@ -1,5 +1,6 @@
 import unittest
 
+from bluetti_bt_lib.devices.ac180p import AC180P
 from bluetti_bt_lib.devices.ac200l import AC200L
 from bluetti_bt_lib.devices.ac300 import AC300
 from bluetti_bt_lib.devices.ac500 import AC500
@@ -25,6 +26,7 @@ SOC_RANGE_REGISTERS = {
     EP500: (3015, 3016),
     EP500P: (3015, 3016),
     AP300: (2022, 2023),
+    AC180P: (2022, 2023),
     EL100V2: (2022, 2023),
     EL100mini: (2022, 2023),
     EL200V2: (2022, 2023),

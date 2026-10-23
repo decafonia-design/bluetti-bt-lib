@@ -2,7 +2,7 @@
 
 from ..base_devices import BluettiDevice
 
-from ..devices import DEVICES, DEVICE_NAME_RE
+from ..devices import DEVICES, DEVICE_ALIASES, DEVICE_NAME_RE
 
 
 def build_device(name: str) -> BluettiDevice | None:
@@ -16,7 +16,7 @@ def build_device(name: str) -> BluettiDevice | None:
     if devType is None:
         return None
 
-    Station = DEVICES.get(devType)
+    Station = DEVICES.get(DEVICE_ALIASES.get(devType, devType))
 
     if Station is None:
         return None
