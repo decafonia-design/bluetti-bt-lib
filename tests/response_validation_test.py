@@ -33,17 +33,23 @@ def exception_frame(register) -> bytearray:
 
 
 class ScriptedMock(ClientMockNoEncryption):
-    """Answers the next command with queued notifications, then behaves normally."""
+    """Answers the next command with queued notifications, then behaves normally.
 
-    def __init__(self) -> None:
+    ``deaf`` stations answer nothing at all, however many times they are asked.
+    """
+
+    def __init__(self, deaf: bool = False) -> None:
         super().__init__()
         self.replies: list[bytes] = []
         self.commands: list[bytes] = []
         self.unsubscribed = 0
+        self.deaf = deaf
 
     async def write_gatt_char(self, char, data, response=None) -> None:
         request = bytes(data)
         self.commands.append(request)
+        if self.deaf:
+            return
         replies, self.replies = self.replies, []
         if replies:
             for chunk in replies:
@@ -145,28 +151,27 @@ class TestReaderValidation(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(values, {PACK_NUM_REGISTER: b""})
 
     async def test_no_answer_aborts_the_read_and_resyncs(self):
-        ble_mock = ScriptedMock()
+        ble_mock = ScriptedMock(deaf=True)
         ble_mock.add_r_int(PACK_NUM_REGISTER, 4)
-        # Nothing answers the request.
-        ble_mock.replies = [b""]
 
         with patch.object(device_reader, "RESPONSE_TIMEOUT_SECONDS", 0.2):
             reader, values = await self._read_pack_num(ble_mock)
 
         self.assertIsNone(values)
+        # Giving up takes two asks, and both of them are the same request.
+        self.assertEqual(len(ble_mock.commands), 2)
         self.assertEqual(ble_mock.unsubscribed, 1)
         self.assertIsNone(reader.notify_future)
 
     async def test_resynced_link_is_subscribed_again(self):
-        ble_mock = ScriptedMock()
+        ble_mock = ScriptedMock(deaf=True)
         ble_mock.add_r_int(PACK_NUM_REGISTER, 4)
-        ble_mock.replies = [b""]
 
         with patch.object(device_reader, "RESPONSE_TIMEOUT_SECONDS", 0.2):
             reader, values = await self._read_pack_num(ble_mock)
             self.assertIsNone(values)
 
-            ble_mock.replies.clear()
+            ble_mock.deaf = False
             values = await reader.read_locked(
                 [ReadableRegisters(PACK_NUM_REGISTER, 1)], raw=True
             )

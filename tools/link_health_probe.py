@@ -44,6 +44,8 @@ def _stats_line(reader: DeviceReader) -> str:
     """What the reader knows about the request that just went unanswered."""
     stats = reader.link_stats
     parts = [f"request #{stats.requests}", f"{stats.answered} answered before it"]
+    if stats.attempts > 1:
+        parts.append(f"{stats.attempts} attempts for it")
     if stats.slowest >= SLOW_REQUEST_SECONDS:
         parts.append(f"slowest answer {stats.slowest:.2f}s ({stats.slowest_registers})")
     if stats.abort_streak:
@@ -61,6 +63,8 @@ async def run_rounds(reader: DeviceReader, args) -> None:
     worst_streak = 0
     failures: Counter[str] = Counter()
     times: list[float] = []
+    retried = 0
+    recovered = 0
 
     for round_number in range(1, args.rounds + 1):
         walk_packs = args.packs_every >= 1 and (
@@ -73,6 +77,8 @@ async def run_rounds(reader: DeviceReader, args) -> None:
         times.append(elapsed)
 
         stats = reader.link_stats
+        retried += stats.retried
+        recovered += stats.recovered
         if data is None:
             ok_or_not = "ABORT "
             failures[f"{stats.aborted} [{stats.failure}]"] += 1
@@ -84,10 +90,11 @@ async def run_rounds(reader: DeviceReader, args) -> None:
             ok_or_not = "ok    "
 
         slow = f"  slowest {stats.slowest:.2f}s" if stats.slowest else ""
+        asks = f"  {stats.retried} asked again" if stats.retried else ""
         print(
             f"[{round_number:>3}] {elapsed:5.2f}s  {ok_or_not}"
             f"  {stats.answered}/{stats.requests} requests"
-            f"{'' if walk_packs else '  no pack walk'}{slow}"
+            f"{'' if walk_packs else '  no pack walk'}{slow}{asks}"
             + (_stats_line(reader) if data is None else "")
         )
 
@@ -102,6 +109,9 @@ async def run_rounds(reader: DeviceReader, args) -> None:
         await asyncio.sleep(args.gap)
 
     print(f"\n{ok}/{args.rounds} cycles answered, median {statistics.median(times):.2f}s")
+    if retried:
+        # How much of the dropped-request problem the second ask is covering for.
+        print(f"{retried} requests asked for again, {recovered} answered the second time")
     if worst_streak:
         print(f"longest run of cut-short cycles: {worst_streak}")
     if failures:
