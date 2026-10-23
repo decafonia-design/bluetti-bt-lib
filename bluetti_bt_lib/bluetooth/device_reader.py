@@ -31,6 +31,16 @@ PACK_SELECTOR_EARLY_LOOK_SECONDS = 1
 # How long a single request waits for its answer.
 RESPONSE_TIMEOUT_SECONDS = 5
 
+# A read that goes unanswered is asked again before the cycle is given up. Only
+# a read is repeated: the answer to the first attempt, however late it lands,
+# is an answer to the same request, so it cannot end up filed under a different
+# register. A write carries no such guarantee and is never resent.
+READ_ATTEMPTS = 2
+
+# A station that skipped a request usually skipped it because it was busy, so a
+# retry fired off immediately can land in the same busy moment.
+RETRY_PAUSE_SECONDS = 0.2
+
 # How long a fresh connection gets to finish its key exchange. The device
 # starts the exchange on its own once notifications are on, so it normally
 # takes a second or two.
@@ -92,6 +102,12 @@ class LinkStats:
     """Bytes the station sent about the request it did not answer."""
     sample: str = ""
     """The start of those bytes, hex, to tell a late answer from noise."""
+    attempts: int = 0
+    """Times the aborted request was sent before it was given up on."""
+    retried: int = 0
+    """Reads in this cycle that were sent a second time."""
+    recovered: int = 0
+    """Reads in this cycle that only answered on the second attempt."""
     abort_streak: int = 0
     """Cycles in a row that had an abort, not counting the one in progress."""
 
@@ -156,11 +172,15 @@ class DeviceReader:
         self._rx_frames = 0
         self._rx_unexpected = bytearray()
         self._cycle_aborted = False
-        """MODBUS bytes and notification frames seen about the request in
-        flight, so a timeout can say whether the station stayed quiet or
-        answered something that was not usable. _rx_unexpected keeps the start
-        of a frame that was discarded, which is otherwise thrown away before
-        the timeout can describe it."""
+        """Set when a read cycle ended in an abort, to carry the streak over."""
+        self._retry_pending = False
+        """Set while a read is being asked for a second time, so the answer can
+        be counted as a recovery rather than a plain answer."""
+        # MODBUS bytes and notification frames seen about the request in
+        # flight, so a timeout can say whether the station stayed quiet or
+        # answered something that was not usable. _rx_unexpected keeps the start
+        # of a frame that was discarded, which is otherwise thrown away before
+        # the timeout can describe it.
 
     async def connect(self) -> bool:
         """Establish a persistent connection to the device.
@@ -830,11 +850,20 @@ class DeviceReader:
         stats.failure = ""
         stats.received = 0
         stats.sample = ""
+        stats.attempts = 0
+        stats.retried = 0
+        stats.recovered = 0
+        self._retry_pending = False
 
     def _record_answer(self, registers: DeviceRegister, elapsed: float) -> None:
         """Note a request that was answered, and how long it took."""
         stats = self.link_stats
         stats.answered += 1
+
+        if self._retry_pending:
+            # The station answered, just not to the first ask.
+            stats.recovered += 1
+            self._retry_pending = False
 
         if elapsed > stats.slowest:
             stats.slowest = elapsed
@@ -895,6 +924,8 @@ class DeviceReader:
             f"request #{stats.requests} of this cycle",
             f"{stats.answered} answered before it",
         ]
+        if stats.attempts > 1:
+            parts.append(f"{stats.attempts} attempts for it")
         if stats.slowest >= SLOW_REQUEST_SECONDS:
             parts.append(
                 f"slowest answer {stats.slowest:.1f}s ({stats.slowest_registers})"
@@ -907,10 +938,42 @@ class DeviceReader:
     async def _async_send_command(self, registers: DeviceRegister) -> bytes:
         """Send a command and return its validated response.
 
+        A read that goes unanswered is asked again before the cycle is given up
+        on. That is what a station like the AC300 needs: it drops a request now
+        and then, then answers the next cycle as though nothing had happened, so
+        the only thing the first attempt cost was a whole cycle of data. Only a
+        read is asked twice. A late answer to the first attempt is still an
+        answer to the same request, so the retry cannot file a value under the
+        wrong register the way resending anything else would.
+
         Raises ResponseTimeout when no valid answer arrives in time; the caller
         must then stop using this connection. A MODBUS exception answer (for
         example a register range the device does not support) returns an empty
         response.
+        """
+        attempts = READ_ATTEMPTS if isinstance(registers, ReadableRegisters) else 1
+
+        attempt = 0
+        while True:
+            attempt += 1
+            try:
+                return await self._send_once(registers, attempt, attempt == attempts)
+            except ResponseTimeout:
+                if attempt == attempts:
+                    raise
+
+                self.link_stats.retried += 1
+                self._retry_pending = True
+                await asyncio.sleep(RETRY_PAUSE_SECONDS)
+
+    async def _send_once(
+        self, registers: DeviceRegister, attempt: int, last_attempt: bool
+    ) -> bytes:
+        """Send a command once and wait for the answer to it.
+
+        ``last_attempt`` decides how a missing answer is reported: a read that
+        still has a retry coming is a debug line, not a warning, because the
+        retry is what would otherwise have thrown away the whole cycle.
         """
         self.current_registers = registers
         self.notify_response = bytearray()
@@ -921,7 +984,9 @@ class DeviceReader:
         self._rx_bytes = 0
         self._rx_frames = 0
         self._rx_unexpected = bytearray()
-        self.link_stats.requests += 1
+        if attempt == 1:
+            self.link_stats.requests += 1
+        self.link_stats.attempts = attempt
         sent_at = time.monotonic()
 
         command_bytes = bytes(registers)
@@ -963,8 +1028,18 @@ class DeviceReader:
             # healthy while the device skipped a response, but the answer may
             # also still be on its way: keep going would hand that answer to
             # the next request, which is how a register ends up holding the
-            # value of a different one. Abort the read instead.
+            # value of a different one.
             kind, detail = self._rx_state(registers)
+
+            if not last_attempt:
+                self.logger.debug(
+                    "No answer to %s within %ss, asking again: %s",
+                    registers,
+                    RESPONSE_TIMEOUT_SECONDS,
+                    detail,
+                )
+                raise ResponseTimeout(registers, detail) from None
+
             stats = self.link_stats
             stats.aborted = str(registers)
             stats.failure = kind

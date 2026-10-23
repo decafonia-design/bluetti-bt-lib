@@ -248,6 +248,12 @@ alone but fails in the middle of a cycle is a timing problem, a block that fails
 both ways is that register. `--packs-every N` walks the pack slots every Nth
 round, which is how a device with battery packs is tested with and without them.
 
+A read that goes unanswered is asked for once more before the cycle is given up
+on. The second ask is only safe for reads: a late answer to the first one answers
+the same request. Writes are never sent twice. A cycle the retry saved is not
+logged as a warning at all, and the probe prints how many requests had to be
+asked twice and how many of those answered the second time.
+
 ## Adding fields
 
 To add new fields, you can use the `bluetti-detect` command to first find out which version of iot protocol is used and if it uses encryption.
