@@ -1,6 +1,8 @@
 import unittest
 
-from bluetti_bt_lib.devices.ac300 import AC300
+from bluetti_bt_lib.devices.ac300 import AC300, SWITCH_VERIFICATION_DELAY
+from bluetti_bt_lib.devices.ac500 import AC500
+from bluetti_bt_lib.devices.el100v2 import EL100V2
 from bluetti_bt_lib.fields import NumberField
 
 
@@ -89,6 +91,26 @@ class TestAC300(unittest.TestCase):
         self.assertIsNone(self.device.build_write_command("soc_range_start", 150))
         self.assertIsNone(self.device.build_write_command("soc_range_start", -1))
         self.assertIsNone(self.device.build_write_command("soc_range_start", True))
+
+    def test_switches_are_read_back_after_a_longer_pause(self):
+        # The tower is slower than the newer stations to show a control write in
+        # its own register. Reading it back after the 1s default returned the
+        # value from before the write, so the DC toggle was reported as a failed
+        # write check even though it had gone through.
+        switches = self.device.get_switch_fields()
+        self.assertEqual(len(switches), 4)
+        for field in switches:
+            with self.subTest(field=field.name):
+                self.assertEqual(field.verification_delay, SWITCH_VERIFICATION_DELAY)
+
+    def test_other_profiles_still_take_the_default_switch_delay(self):
+        # This is the AC300's own quirk, not something the newer stations need.
+        for device_cls in (EL100V2, AC500):
+            switches = device_cls().get_switch_fields()
+            self.assertTrue(switches)
+            for field in switches:
+                with self.subTest(device=device_cls.__name__, field=field.name):
+                    self.assertIsNone(field.verification_delay)
 
     def test_ups_switches_present_and_writable(self):
         names = {f.name for f in self.device.get_switch_fields()}
