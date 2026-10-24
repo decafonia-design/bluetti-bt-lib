@@ -13,10 +13,14 @@ from ..fields import (
 from ..enums import OutputMode, UpsMode, SplitPhaseMode
 
 # The tower's older Bluetooth stack is slower to reflect a control write in its
-# own register than the newer stations are. Reading a switch back after the 1s
-# default has been seen to return the value from before the write, which the
-# write check then reports as a failure even though the switch did change.
-SWITCH_VERIFICATION_DELAY = 1.5
+# own register than the newer stations are, and how slow it is varies from write
+# to write. Reading a switch back after the 1s default has been seen to return
+# the value from before the write, which the write check then reports as a
+# failure even though the switch did change. This is a verification *window*:
+# the read-back is repeated every 0.5s until the tower's register catches up,
+# so the typical toggle is confirmed in about a second while the slow ones still
+# get checked all the way out to 3s.
+SWITCH_VERIFICATION_DELAY = 3.0
 
 
 class AC300(BaseDeviceV1):

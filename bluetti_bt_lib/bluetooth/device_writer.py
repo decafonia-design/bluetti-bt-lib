@@ -19,6 +19,13 @@ from ..registers import ReadableRegisters, WriteableRegister
 from ..devices.charger2 import CHARGER2, CHARGER2_CONTROL_STATES
 
 
+# How far apart the read-backs of one write verification are spaced. The
+# verification delay a device declares is a *window*: the read-back is retried
+# across it until the register shows the new value, so a slow station is
+# confirmed as soon as it catches up instead of after one fixed pause.
+VERIFICATION_REREAD_SECONDS = 0.5
+
+
 def _expected_readback(field_obj, value: Any) -> Any:
     """Put a requested write value in the form the field parses back to.
 
@@ -39,10 +46,11 @@ def _expected_readback(field_obj, value: Any) -> Any:
 class WriteVerificationResult:
     """Result of writing a field and reading its state back from the device.
 
-    ``verified`` is False when the read-back straight after the write did not
-    match. The device can still have applied the change - a busy poll can
-    return a stale register - so callers should read that as "not confirmed
-    yet" rather than "the write failed".
+    ``verified`` is False when none of the read-backs across the verification
+    window matched. The device can still have applied the change - a station
+    whose registers lag the control it applied only shows the new value on a
+    later read - so callers should read that as "not confirmed yet" rather than
+    "the write failed".
     """
 
     write_succeeded: bool
@@ -57,14 +65,17 @@ class DeviceWriterConfig:
 
 
 def _select_verification_delay(field_obj, is_shared_control: bool) -> float:
-    """Pick how long to wait after a write before reading it back.
+    """Pick how long a write's verification read-back may keep trying.
 
-    A field can declare its own delay in the device config (slow-to-apply
-    settings such as the AC300 SOC range thresholds, and the 2s delay
-    SelectField carries by default); otherwise Charger 2 shared controls use
-    the extended delay and everything else the short default. The short
-    default still gives the station time to settle: reading back too soon has
-    been seen to return the response belonging to a different request.
+    The value is a window, not a pause: the first read-back goes out
+    VERIFICATION_REREAD_SECONDS after the write and is repeated at that spacing
+    until the register agrees or the window runs out. A field can declare its
+    own window in the device config (slow-to-apply settings such as the AC300
+    SOC range thresholds, and the 2s window SelectField carries by default);
+    otherwise Charger 2 shared controls use the extended window and everything
+    else the short default. The short default still gives the station time to
+    settle: reading back too soon has been seen to return the response belonging
+    to a different request.
     """
     if field_obj is not None and field_obj.verification_delay is not None:
         return field_obj.verification_delay
@@ -448,62 +459,62 @@ class DeviceWriter:
                     if not write_succeeded:
                         return WriteVerificationResult(False, False)
 
-                    # Allow the device time to apply the write before
-                    # verification (see _select_verification_delay).
-                    verification_delay = _select_verification_delay(
+                    # The station needs a moment to reflect a control write in
+                    # its own register, and how long that takes varies. Spend
+                    # the verification window on repeated read-backs rather than
+                    # one fixed pause: a station that applies quickly is
+                    # confirmed quickly, and one that lags is confirmed as soon
+                    # as its register catches up (see
+                    # _select_verification_delay).
+                    window = _select_verification_delay(
                         field_obj, is_shared_control
                     )
                     self.logger.debug(
                         "Write verification: device_class=%s field=%s "
-                        "is_shared_control=%s delay=%.1fs",
+                        "is_shared_control=%s window=%.1fs",
                         type(self.bluetti_device).__name__,
                         field,
                         is_shared_control,
-                        verification_delay,
-                    )
-                    await asyncio.sleep(verification_delay)
-                    self.logger.debug(
-                        "Write verification delay elapsed for %s; reading back",
-                        field,
+                        window,
                     )
 
-                    # Read back only the register(s) containing the requested field.
-                    if is_shared_control:
-                        raw_data = await self.reader.read_locked(
-                            [ReadableRegisters(15600, 1)],
-                            raw=True,
-                        )
-                        raw_word = raw_data.get(15600) if raw_data else None
+                    async def read_back() -> dict | None:
+                        """One read-back of the register(s) holding the field.
 
-                        if raw_word is None or len(raw_word) != 2:
-                            self.logger.warning(
-                                "Charger 2 write sent, but register 15600 "
-                                "could not be read back"
+                        None when the attempt produced no usable answer.
+                        """
+                        if is_shared_control:
+                            raw_data = await self.reader.read_locked(
+                                [ReadableRegisters(15600, 1)],
+                                raw=True,
                             )
-                            return WriteVerificationResult(True, False)
+                            raw_word = raw_data.get(15600) if raw_data else None
 
-                        actual_word = struct.unpack("!H", raw_word)[0]
+                            if raw_word is None or len(raw_word) != 2:
+                                return None
 
-                        self.logger.debug(
-                            "Charger 2 register 15600 read-back: "
-                            "raw=%s decoded=0x%04X expected_field=%s "
-                            "requested=%r",
-                            raw_word.hex(),
-                            actual_word,
-                            field,
-                            value,
-                        )
+                            actual_word = struct.unpack("!H", raw_word)[0]
 
-                        if actual_word not in CHARGER2_CONTROL_STATES:
-                            self.logger.warning(
-                                "Unknown Charger 2 read-back value: 0x%04X",
+                            self.logger.debug(
+                                "Charger 2 register 15600 read-back: "
+                                "raw=%s decoded=0x%04X expected_field=%s "
+                                "requested=%r",
+                                raw_word.hex(),
                                 actual_word,
+                                field,
+                                value,
                             )
-                            return WriteVerificationResult(True, False)
 
-                        values = self.bluetti_device.parse(15600, raw_word)
-                    else:
-                        values = await self.reader.read_locked(
+                            if actual_word not in CHARGER2_CONTROL_STATES:
+                                self.logger.warning(
+                                    "Unknown Charger 2 read-back value: 0x%04X",
+                                    actual_word,
+                                )
+                                return None
+
+                            return self.bluetti_device.parse(15600, raw_word)
+
+                        return await self.reader.read_locked(
                             [
                                 ReadableRegisters(
                                     field_obj.address, field_obj.size
@@ -511,41 +522,68 @@ class DeviceWriter:
                             ],
                         )
 
-                        if not values or field not in values:
-                            self.logger.warning(
-                                "Write sent, but field %s could not be read back",
-                                field,
-                            )
-                            return WriteVerificationResult(True, False)
+                    expected = _expected_readback(field_obj, value)
+                    loop = asyncio.get_running_loop()
+                    deadline = loop.time() + window
+                    step = min(VERIFICATION_REREAD_SECONDS, window)
+                    values: dict[str, Any] | None = None
+                    attempts = 0
+                    verified = False
 
-                    actual_value = values.get(field)
-                    verified = actual_value == _expected_readback(field_obj, value)
+                    while True:
+                        attempts += 1
+                        await asyncio.sleep(step)
+                        attempt_values = await read_back()
+
+                        if attempt_values and field in attempt_values:
+                            values = attempt_values
+                            if values.get(field) == expected:
+                                verified = True
+                                break
+                        elif attempts == 1:
+                            self.logger.warning(
+                                "Write sent, but %s could not be read back",
+                                "register 15600"
+                                if is_shared_control
+                                else f"field {field}",
+                            )
+
+                        remaining = deadline - loop.time()
+                        if remaining <= 0:
+                            break
+                        step = min(VERIFICATION_REREAD_SECONDS, remaining)
+
+                    actual_value = values.get(field) if values else None
 
                     self.logger.debug(
                         "Write verification result for %s: requested %r, "
-                        "device reports %r",
+                        "device reports %r after %d read-back(s)",
                         field,
                         value,
                         actual_value,
+                        attempts,
                     )
 
                     if not verified:
-                        # The device accepted the write; only the read-back
-                        # right after it disagreed. A device busy serving
-                        # other polls can return a stale register, and the
-                        # next poll usually shows the change.
+                        # The device accepted the write; the read-backs across
+                        # the window still disagreed. The station's own copy of
+                        # the register lags the control it has already applied,
+                        # so the next poll usually shows the change.
                         self.logger.warning(
-                            "Write of %s=%r was accepted, but the read-back "
-                            "just after it still reported %r; the change may "
+                            "Write of %s=%r was accepted, but %d read-back%s "
+                            "across %.1fs still reported %r; the change may "
                             "only show up on the next poll",
                             field,
                             value,
+                            attempts,
+                            "" if attempts == 1 else "s",
+                            window,
                             actual_value,
                         )
 
                     return WriteVerificationResult(
                         write_succeeded=True,
-                        readback_succeeded=True,
+                        readback_succeeded=values is not None,
                         values=values,
                         verified=verified,
                     )

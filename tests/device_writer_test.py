@@ -13,7 +13,13 @@ from bluetti_bt_lib.bluetooth.device_reader import DeviceReader, DeviceReaderCon
 from bluetti_bt_lib.bluetooth.device_writer import _select_verification_delay
 from bluetti_bt_lib.bluetooth.encryption import BluettiEncryption
 from bluetti_bt_lib.devices.ac180 import AC180
-from bluetti_bt_lib.fields import FieldName, NumberField, SelectField, UIntField
+from bluetti_bt_lib.fields import (
+    FieldName,
+    NumberField,
+    SelectField,
+    SwitchField,
+    UIntField,
+)
 from bluetti_bt_lib.utils.bleak_client_mock import ClientMockNoEncryption
 
 NOTIFY_UUID = "0000ffe1-0000-1000-8000-00805f9b34fb"
@@ -278,6 +284,109 @@ class TestVerifiedSelectWrite(unittest.IsolatedAsyncioTestCase):
 
         self.assertFalse(result.write_succeeded)
         self.assertFalse(result.verified)
+
+
+class TestSlowStationIsReRead(unittest.IsolatedAsyncioTestCase):
+    """The verification delay is a window, and the read-back is retried in it.
+
+    The AC300 tower applies a control write but only reflects it in its own
+    register some time later, by an amount that varies from write to write. A
+    single read-back after one fixed pause races that refresh and loses about
+    half the time, which reads as a failed write check.
+    """
+
+    WINDOW = 1.0
+
+    async def asyncSetUp(self):
+        self.client = ClientMockNoEncryption()
+        self.original_write = self.client.write_gatt_char
+        self.device = BluettiDevice(
+            fields=[
+                SwitchField(
+                    FieldName.CTRL_AC, 150, verification_delay=self.WINDOW
+                )
+            ]
+        )
+        self.lock = asyncio.Lock()
+        self.reader = DeviceReader(
+            mac=self.client.address,
+            bluetti_device=self.device,
+            future_builder_method=asyncio.get_running_loop().create_future,
+            config=DeviceReaderConfig(timeout=10),
+            lock=self.lock,
+            ble_client=self.client,
+        )
+        self.writer = DeviceWriter(
+            self.client,
+            self.device,
+            DeviceWriterConfig(timeout=10),
+            self.lock,
+            reader=self.reader,
+        )
+        self.reads = 0
+
+    def lag_station(self, lag: float):
+        """Station that only shows a write in its register `lag` seconds on."""
+        original = self.original_write
+
+        async def lagged_write(char_specifier, data, response=None):
+            command = bytes(data)
+            if len(command) >= 4 and command[1] == 6:
+                address, value = struct.unpack_from("!HH", command, 2)
+                asyncio.get_running_loop().call_later(
+                    lag, self.client.add_r_int, address, value
+                )
+                return
+
+            if len(command) >= 4 and command[1] == 3:
+                self.reads += 1
+
+            await original(char_specifier, data, response)
+
+        self.client.write_gatt_char = lagged_write
+
+    async def asyncTearDown(self):
+        await self.reader.disconnect()
+
+    async def test_a_quick_station_is_confirmed_on_the_first_read_back(self):
+        self.lag_station(0.0)
+        self.client.add_r_int(150, 0)
+
+        start = time.monotonic()
+        result = await self.writer.write_verified(FieldName.CTRL_AC.value, True)
+        elapsed = time.monotonic() - start
+
+        self.assertTrue(result.verified)
+        self.assertEqual(self.reads, 1)
+        # The window is a ceiling rather than a wait, so a station that applies
+        # the write is confirmed after one read-back instead of after the delay.
+        self.assertLess(elapsed, self.WINDOW)
+
+    async def test_a_station_that_lags_is_confirmed_once_it_catches_up(self):
+        self.lag_station(0.7)
+        self.client.add_r_int(150, 0)
+
+        result = await self.writer.write_verified(FieldName.CTRL_AC.value, True)
+
+        # The first read-back still reports the value from before the write, so
+        # verification tries again instead of calling the write a failure.
+        self.assertTrue(result.verified)
+        self.assertEqual(self.reads, 2)
+
+    async def test_a_station_that_never_catches_up_is_not_verified(self):
+        self.lag_station(5.0)
+        self.client.add_r_int(150, 0)
+
+        start = time.monotonic()
+        result = await self.writer.write_verified(FieldName.CTRL_AC.value, True)
+        elapsed = time.monotonic() - start
+
+        self.assertTrue(result.write_succeeded)
+        self.assertTrue(result.readback_succeeded)
+        self.assertFalse(result.verified)
+        self.assertFalse(result.values[FieldName.CTRL_AC.value])
+        # The window bounds the work: the retries stop when it runs out.
+        self.assertLess(elapsed, self.WINDOW + 0.5)
 
 
 class TestEncryptionReadyWait(unittest.IsolatedAsyncioTestCase):
