@@ -10,7 +10,10 @@ from bleak.exc import BleakError
 from bluetti_bt_lib.base_devices import BluettiDevice
 from bluetti_bt_lib.bluetooth import DeviceWriter, DeviceWriterConfig
 from bluetti_bt_lib.bluetooth.device_reader import DeviceReader, DeviceReaderConfig
-from bluetti_bt_lib.bluetooth.device_writer import _select_verification_delay
+from bluetti_bt_lib.bluetooth.device_writer import (
+    DEFAULT_VERIFICATION_WINDOW_SECONDS,
+    _select_verification_delay,
+)
 from bluetti_bt_lib.bluetooth.encryption import BluettiEncryption
 from bluetti_bt_lib.devices.ac180 import AC180
 from bluetti_bt_lib.fields import (
@@ -143,11 +146,15 @@ class TestDeviceWriter(unittest.IsolatedAsyncioTestCase):
 
     def test_verification_delay_selection(self):
         fast = UIntField(FieldName.DC_INPUT_POWER, 36)
-        # Default short delay, extended for Charger 2 shared controls.
-        self.assertEqual(_select_verification_delay(fast, False), 1.0)
-        self.assertEqual(_select_verification_delay(fast, True), 2.0)
+        # Fields with no window of their own take the default, shared
+        # controls included.
+        self.assertEqual(
+            _select_verification_delay(fast),
+            DEFAULT_VERIFICATION_WINDOW_SECONDS,
+        )
+        self.assertEqual(DEFAULT_VERIFICATION_WINDOW_SECONDS, 3.0)
 
-        # A field-declared delay wins over both defaults.
+        # A field-declared window wins over the default.
         slow = NumberField(
             FieldName.BATTERY_SOC_RANGE_START,
             3015,
@@ -155,10 +162,9 @@ class TestDeviceWriter(unittest.IsolatedAsyncioTestCase):
             0,
             100,
             5,
-            verification_delay=3.0,
+            verification_delay=5.0,
         )
-        self.assertEqual(_select_verification_delay(slow, False), 3.0)
-        self.assertEqual(_select_verification_delay(slow, True), 3.0)
+        self.assertEqual(_select_verification_delay(slow), 5.0)
 
     async def test_write_bleak_error_clears_notifier_ownership(self):
         writer = DeviceWriter(

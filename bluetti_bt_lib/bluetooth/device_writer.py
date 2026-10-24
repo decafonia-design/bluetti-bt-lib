@@ -25,6 +25,11 @@ from ..devices.charger2 import CHARGER2, CHARGER2_CONTROL_STATES
 # confirmed as soon as it catches up instead of after one fixed pause.
 VERIFICATION_REREAD_SECONDS = 0.5
 
+# Window used when a field does not declare its own. A quick station is
+# confirmed by the first read-back, so widening this only buys extra attempts
+# for the writes that have not landed yet.
+DEFAULT_VERIFICATION_WINDOW_SECONDS = 3.0
+
 
 def _expected_readback(field_obj, value: Any) -> Any:
     """Put a requested write value in the form the field parses back to.
@@ -64,7 +69,7 @@ class DeviceWriterConfig:
         self.use_encryption = use_encryption
 
 
-def _select_verification_delay(field_obj, is_shared_control: bool) -> float:
+def _select_verification_delay(field_obj) -> float:
     """Pick how long a write's verification read-back may keep trying.
 
     The value is a window, not a pause: the first read-back goes out
@@ -72,14 +77,14 @@ def _select_verification_delay(field_obj, is_shared_control: bool) -> float:
     until the register agrees or the window runs out. A field can declare its
     own window in the device config (slow-to-apply settings such as the AC300
     SOC range thresholds, and the 2s window SelectField carries by default);
-    otherwise Charger 2 shared controls use the extended window and everything
-    else the short default. The short default still gives the station time to
-    settle: reading back too soon has been seen to return the response belonging
-    to a different request.
+    everything else uses DEFAULT_VERIFICATION_WINDOW_SECONDS. Charger 2 shared
+    controls used to ask for a longer window than the rest; now that a window
+    is spent on repeated read-backs rather than one fixed pause, the default
+    covers them too.
     """
     if field_obj is not None and field_obj.verification_delay is not None:
         return field_obj.verification_delay
-    return 2.0 if is_shared_control else 1.0
+    return DEFAULT_VERIFICATION_WINDOW_SECONDS
 
 
 class DeviceWriter:
@@ -466,9 +471,7 @@ class DeviceWriter:
                     # confirmed quickly, and one that lags is confirmed as soon
                     # as its register catches up (see
                     # _select_verification_delay).
-                    window = _select_verification_delay(
-                        field_obj, is_shared_control
-                    )
+                    window = _select_verification_delay(field_obj)
                     self.logger.debug(
                         "Write verification: device_class=%s field=%s "
                         "is_shared_control=%s window=%.1fs",
