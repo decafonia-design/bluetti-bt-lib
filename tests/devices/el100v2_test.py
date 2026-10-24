@@ -27,7 +27,7 @@ class TestEL100V2(unittest.TestCase):
         self.assertIsInstance(ups, SelectField)
         self.assertEqual(ups.address, 2005)
         self.assertIs(ups.e, WorkingModeV2)
-        self.assertEqual(ups.verification_delay, 2.0)
+        self.assertIsNone(ups.verification_delay)
 
         self.assertEqual(
             self.device.build_write_command("ctrl_ups_mode", "STANDARD").value, 4
@@ -64,14 +64,14 @@ class TestEL100V2(unittest.TestCase):
         self.assertEqual(self._field("ac_output_voltage").address, 1431)
         self.assertFalse(any(f.address == 1511 for f in self.device.fields))
 
-    def test_slow_selects_declare_verification_delay(self):
+    def test_selects_take_the_default_verification_window(self):
         for name in SLOW_SELECTS:
             with self.subTest(field=name):
-                self.assertEqual(self._field(name).verification_delay, 2.0)
+                self.assertIsNone(self._field(name).verification_delay)
 
-    def test_soc_range_keeps_verification_delay(self):
-        self.assertEqual(self._field("soc_range_start").verification_delay, 2.0)
-        self.assertEqual(self._field("soc_range_end").verification_delay, 2.0)
+    def test_soc_range_takes_the_default_verification_window(self):
+        self.assertIsNone(self._field("soc_range_start").verification_delay)
+        self.assertIsNone(self._field("soc_range_end").verification_delay)
 
 
 if __name__ == "__main__":
