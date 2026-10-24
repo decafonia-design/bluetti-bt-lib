@@ -1,6 +1,8 @@
+import struct
 import unittest
 
 from bluetti_bt_lib.devices import EL100V2, EL200V2, EL300, EL30V2
+from bluetti_bt_lib.enums import WorkingModeEL300
 from bluetti_bt_lib.utils.device_builder import build_device
 
 # These portables share one register map, so their device files are kept as
@@ -46,6 +48,20 @@ class TestEL300(unittest.TestCase):
         self.assertEqual(addresses["soc_range_start"], 2022)
         self.assertEqual(addresses["soc_range_end"], 2023)
         self.assertEqual(addresses["ac_output_voltage"], 1431)
+
+    def test_ups_mode_reads_customized_as_3(self):
+        # An owner's Elite 300 reads 3 at 2005 while the BLUETTI app and the
+        # official integration show Customized UPS.
+        field = next(f for f in EL300().fields if f.name == "ctrl_ups_mode")
+        self.assertEqual(
+            field.parse(struct.pack("!H", 3)), WorkingModeEL300.CUSTOMIZED
+        )
+
+    def test_ups_mode_leaves_unseen_values_unknown(self):
+        # 1 is Customized on the other V2 portables; on the Elite 300 it has
+        # not been seen yet, so it must not be read as a mode.
+        field = next(f for f in EL300().fields if f.name == "ctrl_ups_mode")
+        self.assertIsNone(field.parse(struct.pack("!H", 1)))
 
 
 if __name__ == "__main__":
