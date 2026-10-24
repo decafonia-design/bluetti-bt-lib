@@ -19,15 +19,16 @@ from ..registers import ReadableRegisters, WriteableRegister
 from ..devices.charger2 import CHARGER2, CHARGER2_CONTROL_STATES
 
 
-# How far apart the read-backs of one write verification are spaced. The
-# verification delay a device declares is a *window*: the read-back is retried
-# across it until the register shows the new value, so a slow station is
-# confirmed as soon as it catches up instead of after one fixed pause.
+# A verification delay is a *window*, not a pause: the first read-back goes out
+# VERIFICATION_FIRST_READ_SECONDS after the write and is repeated every
+# VERIFICATION_REREAD_SECONDS until the register shows the new value or the
+# window runs out. A station that applies a write is confirmed by the first
+# read-back; one whose register lags is confirmed as soon as it catches up; only
+# a write that never shows up uses the whole window.
+VERIFICATION_FIRST_READ_SECONDS = 1.0
 VERIFICATION_REREAD_SECONDS = 0.5
 
-# Window used when a field does not declare its own. A quick station is
-# confirmed by the first read-back, so widening this only buys extra attempts
-# for the writes that have not landed yet.
+# Window used when a field does not declare its own.
 DEFAULT_VERIFICATION_WINDOW_SECONDS = 3.0
 
 
@@ -73,14 +74,12 @@ def _select_verification_delay(field_obj) -> float:
     """Pick how long a write's verification read-back may keep trying.
 
     The value is a window, not a pause: the first read-back goes out
-    VERIFICATION_REREAD_SECONDS after the write and is repeated at that spacing
-    until the register agrees or the window runs out. A field can declare its
-    own window in the device config (slow-to-apply settings such as the AC300
-    SOC range thresholds, and the 2s window SelectField carries by default);
-    everything else uses DEFAULT_VERIFICATION_WINDOW_SECONDS. Charger 2 shared
-    controls used to ask for a longer window than the rest; now that a window
-    is spent on repeated read-backs rather than one fixed pause, the default
-    covers them too.
+    VERIFICATION_FIRST_READ_SECONDS after the write and is repeated every
+    VERIFICATION_REREAD_SECONDS until the register agrees or the window runs
+    out. A field can declare its own window for a setting that is genuinely
+    slower to apply than the rest; everything else - switches, selects and
+    numbers alike, Charger 2 shared controls included - uses
+    DEFAULT_VERIFICATION_WINDOW_SECONDS.
     """
     if field_obj is not None and field_obj.verification_delay is not None:
         return field_obj.verification_delay
@@ -467,10 +466,9 @@ class DeviceWriter:
                     # The station needs a moment to reflect a control write in
                     # its own register, and how long that takes varies. Spend
                     # the verification window on repeated read-backs rather than
-                    # one fixed pause: a station that applies quickly is
-                    # confirmed quickly, and one that lags is confirmed as soon
-                    # as its register catches up (see
-                    # _select_verification_delay).
+                    # one fixed pause: the first read-back goes out a second
+                    # after the write, then every 0.5s until the register agrees
+                    # or the window runs out (see _select_verification_delay).
                     window = _select_verification_delay(field_obj)
                     self.logger.debug(
                         "Write verification: device_class=%s field=%s "
@@ -528,7 +526,7 @@ class DeviceWriter:
                     expected = _expected_readback(field_obj, value)
                     loop = asyncio.get_running_loop()
                     deadline = loop.time() + window
-                    step = min(VERIFICATION_REREAD_SECONDS, window)
+                    step = min(VERIFICATION_FIRST_READ_SECONDS, window)
                     values: dict[str, Any] | None = None
                     attempts = 0
                     verified = False

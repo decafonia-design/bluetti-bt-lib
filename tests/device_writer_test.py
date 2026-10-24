@@ -12,6 +12,8 @@ from bluetti_bt_lib.bluetooth import DeviceWriter, DeviceWriterConfig
 from bluetti_bt_lib.bluetooth.device_reader import DeviceReader, DeviceReaderConfig
 from bluetti_bt_lib.bluetooth.device_writer import (
     DEFAULT_VERIFICATION_WINDOW_SECONDS,
+    VERIFICATION_FIRST_READ_SECONDS,
+    VERIFICATION_REREAD_SECONDS,
     _select_verification_delay,
 )
 from bluetti_bt_lib.bluetooth.encryption import BluettiEncryption
@@ -301,17 +303,13 @@ class TestSlowStationIsReRead(unittest.IsolatedAsyncioTestCase):
     half the time, which reads as a failed write check.
     """
 
-    WINDOW = 1.0
+    WINDOW = DEFAULT_VERIFICATION_WINDOW_SECONDS
 
     async def asyncSetUp(self):
         self.client = ClientMockNoEncryption()
         self.original_write = self.client.write_gatt_char
         self.device = BluettiDevice(
-            fields=[
-                SwitchField(
-                    FieldName.CTRL_AC, 150, verification_delay=self.WINDOW
-                )
-            ]
+            fields=[SwitchField(FieldName.CTRL_AC, 150)]
         )
         self.lock = asyncio.Lock()
         self.reader = DeviceReader(
@@ -364,12 +362,16 @@ class TestSlowStationIsReRead(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(result.verified)
         self.assertEqual(self.reads, 1)
+        # The first read-back waits out the initial pause, which is what keeps
+        # it from answering a request the write itself was still waiting on.
+        self.assertGreaterEqual(elapsed, VERIFICATION_FIRST_READ_SECONDS)
         # The window is a ceiling rather than a wait, so a station that applies
         # the write is confirmed after one read-back instead of after the delay.
         self.assertLess(elapsed, self.WINDOW)
 
     async def test_a_station_that_lags_is_confirmed_once_it_catches_up(self):
-        self.lag_station(0.7)
+        # The refresh lands between the first read-back and the next one.
+        self.lag_station(VERIFICATION_FIRST_READ_SECONDS + 0.4)
         self.client.add_r_int(150, 0)
 
         result = await self.writer.write_verified(FieldName.CTRL_AC.value, True)
@@ -392,7 +394,7 @@ class TestSlowStationIsReRead(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result.verified)
         self.assertFalse(result.values[FieldName.CTRL_AC.value])
         # The window bounds the work: the retries stop when it runs out.
-        self.assertLess(elapsed, self.WINDOW + 0.5)
+        self.assertLess(elapsed, self.WINDOW + VERIFICATION_REREAD_SECONDS)
 
 
 class TestEncryptionReadyWait(unittest.IsolatedAsyncioTestCase):

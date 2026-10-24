@@ -60,7 +60,7 @@ class TestSocRangeRollout(unittest.TestCase):
                 self.assertEqual(start.address, start_addr)
                 self.assertEqual(end.address, end_addr)
 
-    def test_every_profile_shares_the_ac300_limits_and_delay(self):
+    def test_every_profile_shares_the_ac300_limits(self):
         for device_cls in SOC_RANGE_REGISTERS:
             with self.subTest(device=device_cls.__name__):
                 _, start, end = self._fields(device_cls)
@@ -72,7 +72,9 @@ class TestSocRangeRollout(unittest.TestCase):
                     # The registers accept whole percents, so the slider does
                     # too rather than snapping to 5.
                     self.assertEqual(field.step, 1)
-                    self.assertEqual(field.verification_delay, 2.0)
+                    # No per-field override: they take the writer's default
+                    # verification window like every other control.
+                    self.assertIsNone(field.verification_delay)
 
     def test_write_commands_build_for_every_profile(self):
         for device_cls, (start_addr, end_addr) in SOC_RANGE_REGISTERS.items():
