@@ -7,3 +7,4 @@ from .split_phase_mode import *
 from .working_mode_v2 import *
 from .working_mode_el300 import *
 from .ups_mode import *
+from .battery_status import *

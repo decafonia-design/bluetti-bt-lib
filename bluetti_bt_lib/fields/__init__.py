@@ -15,4 +15,5 @@ from .SwitchField import *
 from .UIntField import *
 from .NumberField import *
 from .VersionField import *
+from .OffsetIntField import *
 from .SignedDecimalField import SignedDecimalField

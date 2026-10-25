@@ -113,9 +113,18 @@ class LinkStats:
 
 
 class DeviceReaderConfig:
-    def __init__(self, timeout: int = 60, use_encryption: bool = False):
+    def __init__(
+        self,
+        timeout: int = 60,
+        use_encryption: bool = False,
+        max_attempts: int = 10,
+    ):
         self.timeout = timeout
         self.use_encryption = use_encryption
+        # Connection attempts per connect(). Ten can use up most of a caller's
+        # time budget on a device that is gone; a poller that retries on its
+        # own can ask for fewer (upstream PR #67 suggests 3).
+        self.max_attempts = max_attempts
 
 
 class DeviceReader:
@@ -212,7 +221,7 @@ class DeviceReader:
                     BleakClientWithServiceCache,
                     self.device,
                     self.device.name or "Unknown Device",
-                    max_attempts=10,
+                    max_attempts=self.config.max_attempts,
                 )
 
             # _notified_client tracks the client whose subscription is

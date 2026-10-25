@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from ..enums import EcoMode, DisplayMode, ChargingMode, WorkingModeEL300
+from ..enums import BatteryStatus, EcoMode, DisplayMode, ChargingMode, WorkingModeEL300
 from ..fields import (
     FieldName,
     UIntField,
@@ -8,6 +8,9 @@ from ..fields import (
     SelectField,
     SwitchField,
     DecimalField,
+    EnumField,
+    OffsetIntField,
+    SignedDecimalField,
     VersionField,
     SwapStringField,
 )
@@ -19,6 +22,23 @@ class EL300(BaseDeviceV2):
         super().__init__(
             [
                 DecimalField(FieldName.TIME_REMAINING, 104, 0, 1 / Decimal(60)),
+                # Verified on an owner's Elite 300 (dump of 25 Oct 2026, 96 %,
+                # feeding ~7 W): 100 = 996 (99.6 V; ~30 LiFePO4 cells at 3.32 V),
+                # 101 = 7 (0.07 A, so ~7 W, which matches the slow drop of the
+                # charge level), 103 = 0 at that small load, 105 = 104 while
+                # discharging. The scale of 101 differs from what other projects
+                # give for the Elite 200 V2, so these stay on the Elite 300 only.
+                DecimalField(FieldName.BATTERY_VOLTAGE, 100, 1, 1, Decimal(0), Decimal(200)),
+                SignedDecimalField(FieldName.BATTERY_CURRENT, 101, 2, 1, Decimal(-100), Decimal(100)),
+                EnumField(FieldName.BATTERY_STATUS, 103, BatteryStatus),
+                DecimalField(FieldName.TIME_TO_EMPTY, 105, 0, 1 / Decimal(60)),
+                # Lifetime energy in 0.1 kWh (same dump: 4, 65, 74, 56). They are
+                # the low words of 32-bit counters; the high words (151, 153, ...)
+                # read 0, so reading one register stays right up to 6553.5 kWh.
+                DecimalField(FieldName.DC_OUTPUT_ENERGY, 150, 1),
+                DecimalField(FieldName.AC_OUTPUT_ENERGY, 152, 1),
+                DecimalField(FieldName.DC_INPUT_ENERGY, 154, 1),
+                DecimalField(FieldName.AC_INPUT_ENERGY, 156, 1),
                 UIntField(FieldName.DC_OUTPUT_POWER, 140),
                 UIntField(FieldName.AC_OUTPUT_POWER, 142),
                 UIntField(FieldName.DC_INPUT_POWER, 144),
@@ -65,6 +85,12 @@ class EL300(BaseDeviceV2):
                     1,
                 ),
                 SelectField(FieldName.CTRL_DISPLAY_TIMEOUT, 2067, DisplayMode),
+                # Battery health and temperature (same dump): 6006 = 100 %,
+                # 6007 = 54, stored as degrees Celsius + 40, so 14 degrees on a
+                # cool October evening. The per-cell list from 6300 is not there
+                # on the Elite 300 (only three values, and no answer from 6310).
+                UIntField(FieldName.BATTERY_SOH, 6006, min=0, max=100),
+                OffsetIntField(FieldName.BATTERY_TEMPERATURE, 6007, 40, min=-40, max=100),
                 VersionField(FieldName.VER_BMS, 6175),
                 SwapStringField(FieldName.WIFI_NAME, 12002, 16),
             ],
