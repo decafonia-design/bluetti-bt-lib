@@ -1,7 +1,10 @@
+import logging
 from typing import Any, List
 
 from ..registers import ReadableRegisters, WriteableRegister
 from ..fields import DeviceField, BoolField, BoolFieldNonZero, SwitchField, SelectField, NumberField, FieldName
+
+_LOGGER = logging.getLogger(__name__)
 
 # Asking for one field at a time costs a radio round trip each, and a station
 # with 28 of them spends most of a poll cycle waiting for answers. Fields that
@@ -180,7 +183,15 @@ class BluettiDevice:
         for f in fields:
             data_start = 2 * (f.address - starting_address)
             field_data = data[data_start : data_start + 2 * f.size]
-            value = f.parse(field_data)
+            try:
+                value = f.parse(field_data)
+            except ValueError as err:
+                # One field with a value it does not know (a Charger 2 that
+                # briefly reports an unknown control word right after a
+                # reconnect, for one) must not cost the whole cycle: leave
+                # that field out and keep the others.
+                _LOGGER.warning("Skipping %s: %s", f.name, err)
+                continue
             if not f.in_range(value):
                 continue
             if pack_num is not None and f in self.pack_fields:

@@ -46,6 +46,25 @@ class TestCharger2(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.silent_field.parse(data)
 
+    def test_unknown_control_word_skips_only_the_controls(self):
+        # A station that reads 0x001E at 15600 for a minute after a hard
+        # disconnect must not lose the whole cycle, only the two controls.
+        with self.assertLogs("bluetti_bt_lib.base_devices.bluetti_device", "WARNING") as logs:
+            parsed = self.device.parse(15600, bytes.fromhex("001E"))
+        self.assertEqual(parsed, {})
+        self.assertEqual(len(logs.records), 2)
+        self.assertIn("0x001E", logs.output[0])
+
+    def test_known_control_word_still_parses_both_controls(self):
+        parsed = self.device.parse(15600, bytes.fromhex("5529"))
+        self.assertEqual(
+            parsed,
+            {
+                FieldName.CTRL_SYSTEM_ON_OFF.value: True,
+                FieldName.CTRL_SILENT_CHARGING.value: False,
+            },
+        )
+
     def test_both_controls_are_classified_as_switches(self):
         switch_fields = [
             field.name for field in self.device.get_switch_fields()
