@@ -30,10 +30,10 @@ class TestEL10(unittest.TestCase):
         # 105 mirrors the charge time at 104, so it is not a separate sensor.
         self.assertFalse(any(f.address == 105 for f in self.device.fields))
 
-    def test_slow_selects_declare_verification_delay(self):
+    def test_selects_take_the_default_verification_window(self):
         for name in SLOW_SELECTS:
             with self.subTest(field=name):
-                self.assertEqual(self._field(name).verification_delay, 2.0)
+                self.assertIsNone(self._field(name).verification_delay)
 
     def test_no_ups_controls(self):
         # The small power station has no UPS register map.

@@ -53,7 +53,6 @@ class EL300(BaseDeviceV2):
                     5,
                     100,
                     1,
-                    verification_delay=2.0,
                 ),
                 NumberField(
                     FieldName.BATTERY_SOC_RANGE_END,
@@ -62,7 +61,6 @@ class EL300(BaseDeviceV2):
                     5,
                     100,
                     1,
-                    verification_delay=2.0,
                 ),
                 SelectField(FieldName.CTRL_DISPLAY_TIMEOUT, 2067, DisplayMode),
                 VersionField(FieldName.VER_BMS, 6175),

@@ -33,10 +33,10 @@ class TestAC500(unittest.TestCase):
                 self.assertEqual((on.address, on.value), (address, 1))
                 self.assertEqual((off.address, off.value), (address, 0))
 
-    def test_selects_declare_verification_delay(self):
+    def test_selects_take_the_default_verification_window(self):
         for name in ("ctrl_ups_mode", "ctrl_display_timeout"):
             with self.subTest(field=name):
-                self.assertEqual(self._field(name).verification_delay, 2.0)
+                self.assertIsNone(self._field(name).verification_delay)
 
 
 if __name__ == "__main__":

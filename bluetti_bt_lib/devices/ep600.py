@@ -60,7 +60,6 @@ class EP600(BaseDeviceV2):
                     5,
                     100,
                     1,
-                    verification_delay=2.0,
                 ),
                 NumberField(
                     FieldName.BATTERY_SOC_RANGE_END,
@@ -69,7 +68,6 @@ class EP600(BaseDeviceV2):
                     5,
                     100,
                     1,
-                    verification_delay=2.0,
                 ),
                 BoolField(FieldName.CTRL_GENERATOR, 2246),
                 DecimalField(FieldName.GRID_VOLT_MIN_VAL, 2435, 1),

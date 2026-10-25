@@ -3,22 +3,22 @@ import unittest
 from bluetti_bt_lib.devices import DEVICES
 from bluetti_bt_lib.fields import SelectField
 
-# Every device reflects a select write back slowly, so SelectField carries this
-# delay by default. The rollout test keeps new profiles honest about it.
-SELECT_VERIFICATION_DELAY = 2.0
+# SelectField used to carry a longer verification delay of its own because the
+# old write check was a single read-back after a fixed pause. The writer now
+# retries the read-back across a window, which covers a station that is slow to
+# reflect a select, so a select only declares a delay when its profile has a
+# specific reason to.
 
 
 class TestSelectDelayRollout(unittest.TestCase):
     def _selects(self, device_cls):
         return [f for f in device_cls().fields if isinstance(f, SelectField)]
 
-    def test_every_select_carries_the_verification_delay(self):
+    def test_every_select_takes_the_default_verification_window(self):
         for device_name, device_cls in DEVICES.items():
             for field in self._selects(device_cls):
                 with self.subTest(device=device_name, field=field.name):
-                    self.assertEqual(
-                        field.verification_delay, SELECT_VERIFICATION_DELAY
-                    )
+                    self.assertIsNone(field.verification_delay)
 
     def test_profiles_actually_have_select_fields(self):
         # Guards the rollout test against silently covering nothing.

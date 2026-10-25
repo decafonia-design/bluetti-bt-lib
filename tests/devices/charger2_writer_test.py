@@ -136,6 +136,34 @@ class TestCharger2Writer(unittest.IsolatedAsyncioTestCase):
         original_read_locked = self.reader.read_locked
         read_count = 0
 
+        async def fail_readbacks(*args, **kwargs):
+            nonlocal read_count
+            read_count += 1
+            if read_count >= 2:
+                return {}
+            return await original_read_locked(*args, **kwargs)
+
+        self.reader.read_locked = fail_readbacks
+
+        result = await self.writer.write_verified(
+            "ctrl_system_on_off", True
+        )
+
+        self.assertTrue(result.write_succeeded)
+        self.assertFalse(result.readback_succeeded)
+        self.assertFalse(result.verified)
+        self.assertIsNone(result.values)
+        self.assertEqual(len(self.writes), 1)
+
+    async def test_readback_that_fails_once_is_retried(self):
+        # A read-back that gets no answer is not the end of verification: the
+        # window leaves room to ask again, which is what makes a slow or busy
+        # station confirm instead of reporting a failed write.
+        self.client.add_r_int(15600, 0xAA2A)
+
+        original_read_locked = self.reader.read_locked
+        read_count = 0
+
         async def fail_second_read(*args, **kwargs):
             nonlocal read_count
             read_count += 1
@@ -150,9 +178,9 @@ class TestCharger2Writer(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertTrue(result.write_succeeded)
-        self.assertFalse(result.readback_succeeded)
-        self.assertFalse(result.verified)
-        self.assertIsNone(result.values)
+        self.assertTrue(result.readback_succeeded)
+        self.assertTrue(result.verified)
+        self.assertTrue(result.values["ctrl_system_on_off"])
         self.assertEqual(len(self.writes), 1)
 
     async def test_verified_write_reports_state_mismatch(self):

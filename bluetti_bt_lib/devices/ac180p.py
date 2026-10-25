@@ -36,7 +36,6 @@ class AC180P(BaseDeviceV2):
                     5,
                     100,
                     1,
-                    verification_delay=2.0,
                 ),
                 NumberField(
                     FieldName.BATTERY_SOC_RANGE_END,
@@ -45,7 +44,6 @@ class AC180P(BaseDeviceV2):
                     5,
                     100,
                     1,
-                    verification_delay=2.0,
                 ),
             ],
         )
