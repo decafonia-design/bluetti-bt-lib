@@ -2,7 +2,7 @@ import struct
 import unittest
 
 from bluetti_bt_lib.devices import EL100V2, EL200V2, EL300, EL30V2
-from bluetti_bt_lib.enums import WorkingModeEL300
+from bluetti_bt_lib.enums import WorkingModeV2alt
 from bluetti_bt_lib.utils.device_builder import build_device
 
 # These portables share one register map, so their device files are kept as
@@ -54,14 +54,17 @@ class TestEL300(unittest.TestCase):
         # official integration show Customized UPS.
         field = next(f for f in EL300().fields if f.name == "ctrl_ups_mode")
         self.assertEqual(
-            field.parse(struct.pack("!H", 3)), WorkingModeEL300.CUSTOMIZED
+            field.parse(struct.pack("!H", 3)), WorkingModeV2alt.CUSTOMIZED
         )
 
     def test_ups_mode_leaves_unseen_values_unknown(self):
-        # 1 is Customized on the other V2 portables; on the Elite 300 it has
-        # not been seen yet, so it must not be read as a mode.
+        # 1, 2, 4 and 5 are the other modes on the V2 portables; on the
+        # Elite 300 none of them has been seen yet, so none may be read as a
+        # mode.
         field = next(f for f in EL300().fields if f.name == "ctrl_ups_mode")
-        self.assertIsNone(field.parse(struct.pack("!H", 1)))
+        for value in (1, 2, 4, 5):
+            with self.subTest(value=value):
+                self.assertIsNone(field.parse(struct.pack("!H", value)))
 
 
 if __name__ == "__main__":
