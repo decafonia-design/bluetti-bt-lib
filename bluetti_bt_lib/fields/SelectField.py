@@ -13,9 +13,9 @@ class SelectField(EnumField):
         name: FieldName,
         address: int,
         e: Type[E],
-        # Devices apply a select write slowly, so verification waits longer
-        # than the default. A profile can still pass its own delay.
-        verification_delay: float | None = 2.0,
+        # Selects are written like any other control: the writer's default
+        # verification window covers how slowly a station reflects them.
+        verification_delay: float | None = None,
     ):
         super().__init__(name, address, e, verification_delay)
 

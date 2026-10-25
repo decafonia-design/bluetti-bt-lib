@@ -33,7 +33,6 @@ class AC200L(BaseDeviceV1):
                     5,
                     100,
                     1,
-                    verification_delay=2.0,
                 ),
                 NumberField(
                     FieldName.BATTERY_SOC_RANGE_END,
@@ -42,7 +41,6 @@ class AC200L(BaseDeviceV1):
                     5,
                     100,
                     1,
-                    verification_delay=2.0,
                 ),
                 SwitchField(FieldName.CTRL_POWER_OFF, 3060),
                 SelectField(FieldName.CTRL_DISPLAY_TIMEOUT, 3061, DisplayMode),

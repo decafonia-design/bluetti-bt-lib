@@ -31,9 +31,10 @@ class AP300(BaseDeviceV2):
                 # UPS working mode: V2 portables keep it at 2005 and use
                 # different values than the V1 UpsMode register (3001).
                 SelectField(FieldName.CTRL_UPS_MODE, 2005, WorkingModeV2),
-                # UPS grid-charge enable; the AC300 exposes the same function
-                # as ctrl_grid_charge_on (register 3011 there).
-                SwitchField(FieldName.CTRL_GRID_CHARGE_ON, 2008),
+                # Register 2008 is the grid-charge enable on the Elite V2
+                # portables. On an Apex 300 it reads 0 while the app shows grid
+                # charging enabled, and a write is not reflected in the
+                # read-back, so the switch is left off this profile.
                 SwitchField(FieldName.CTRL_AC, 2011),
                 SwitchField(FieldName.CTRL_DC, 2012),
                 SwitchField(FieldName.CTRL_ECO_DC, 2014),
@@ -53,7 +54,6 @@ class AP300(BaseDeviceV2):
                     5,
                     100,
                     1,
-                    verification_delay=2.0,
                 ),
                 NumberField(
                     FieldName.BATTERY_SOC_RANGE_END,
@@ -62,7 +62,6 @@ class AP300(BaseDeviceV2):
                     5,
                     100,
                     1,
-                    verification_delay=2.0,
                 ),
                 SelectField(FieldName.CTRL_DISPLAY_TIMEOUT, 2067, DisplayMode),
                 VersionField(FieldName.VER_BMS, 6175),

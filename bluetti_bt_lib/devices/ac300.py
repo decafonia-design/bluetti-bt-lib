@@ -12,12 +12,6 @@ from ..fields import (
 )
 from ..enums import OutputMode, UpsMode, SplitPhaseMode
 
-# The tower's older Bluetooth stack is slower to reflect a control write in its
-# own register than the newer stations are. Reading a switch back after the 1s
-# default has been seen to return the value from before the write, which the
-# write check then reports as a failure even though the switch did change.
-SWITCH_VERIFICATION_DELAY = 1.5
-
 
 class AC300(BaseDeviceV1):
     def __init__(self):
@@ -41,22 +35,10 @@ class AC300(BaseDeviceV1):
                 SelectField(FieldName.CTRL_UPS_MODE, 3001, UpsMode),
                 BoolField(FieldName.CTRL_SPLIT_PHASE, 3004),
                 EnumField(FieldName.CTRL_SPLIT_PHASE_MODE, 3005, SplitPhaseMode),
-                SwitchField(
-                    FieldName.CTRL_AC, 3007, verification_delay=SWITCH_VERIFICATION_DELAY
-                ),
-                SwitchField(
-                    FieldName.CTRL_DC, 3008, verification_delay=SWITCH_VERIFICATION_DELAY
-                ),
-                SwitchField(
-                    FieldName.CTRL_GRID_CHARGE_ON,
-                    3011,
-                    verification_delay=SWITCH_VERIFICATION_DELAY,
-                ),
-                SwitchField(
-                    FieldName.CTRL_TIME_CONTROL_ON,
-                    3013,
-                    verification_delay=SWITCH_VERIFICATION_DELAY,
-                ),
+                SwitchField(FieldName.CTRL_AC, 3007),
+                SwitchField(FieldName.CTRL_DC, 3008),
+                SwitchField(FieldName.CTRL_GRID_CHARGE_ON, 3011),
+                SwitchField(FieldName.CTRL_TIME_CONTROL_ON, 3013),
                 NumberField(
                     FieldName.BATTERY_SOC_RANGE_START,
                     3015,
@@ -64,7 +46,6 @@ class AC300(BaseDeviceV1):
                     5,
                     100,
                     1,
-                    verification_delay=2.0,
                 ),
                 NumberField(
                     FieldName.BATTERY_SOC_RANGE_END,
@@ -73,7 +54,6 @@ class AC300(BaseDeviceV1):
                     5,
                     100,
                     1,
-                    verification_delay=2.0,
                 ),
                 # SelectField(FieldName.CTRL_DISPLAY_TIMEOUT, 3061, DisplayMode),
             ],

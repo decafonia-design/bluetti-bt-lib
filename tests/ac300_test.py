@@ -1,6 +1,6 @@
 import unittest
 
-from bluetti_bt_lib.devices.ac300 import AC300, SWITCH_VERIFICATION_DELAY
+from bluetti_bt_lib.devices.ac300 import AC300
 from bluetti_bt_lib.devices.ac500 import AC500
 from bluetti_bt_lib.devices.el100v2 import EL100V2
 from bluetti_bt_lib.fields import NumberField
@@ -52,15 +52,16 @@ class TestAC300(unittest.TestCase):
         self.assertEqual(pack_blocks[1].starting_address, 99)
         self.assertEqual(pack_blocks[1].quantity, 1)
 
-    def test_soc_range_slow_verification_delay(self):
-        # The SOC range thresholds are slow to reflect in their register,
-        # so they declare the longer write-verification delay.
+    def test_soc_range_takes_the_default_verification_window(self):
+        # The SOC range thresholds used to declare a longer delay because the
+        # old write check was one read-back after a fixed pause. The window
+        # retries inside itself now, so they need nothing special.
         start = next(
             f for f in self.device.fields if f.name == "soc_range_start"
         )
         end = next(f for f in self.device.fields if f.name == "soc_range_end")
-        self.assertEqual(start.verification_delay, 2.0)
-        self.assertEqual(end.verification_delay, 2.0)
+        self.assertIsNone(start.verification_delay)
+        self.assertIsNone(end.verification_delay)
 
     def test_soc_range_is_writable_number(self):
         start = next(
@@ -92,19 +93,20 @@ class TestAC300(unittest.TestCase):
         self.assertIsNone(self.device.build_write_command("soc_range_start", -1))
         self.assertIsNone(self.device.build_write_command("soc_range_start", True))
 
-    def test_switches_are_read_back_after_a_longer_pause(self):
+    def test_switches_take_the_default_verification_window(self):
         # The tower is slower than the newer stations to show a control write in
-        # its own register. Reading it back after the 1s default returned the
-        # value from before the write, so the DC toggle was reported as a failed
-        # write check even though it had gone through.
+        # its own register, and how much slower varies from write to write. That
+        # is what the writer's re-read window is for, so the switches need no
+        # delay of their own: a fixed pause could never cover the slow writes.
         switches = self.device.get_switch_fields()
         self.assertEqual(len(switches), 4)
         for field in switches:
             with self.subTest(field=field.name):
-                self.assertEqual(field.verification_delay, SWITCH_VERIFICATION_DELAY)
+                self.assertIsNone(field.verification_delay)
 
-    def test_other_profiles_still_take_the_default_switch_delay(self):
-        # This is the AC300's own quirk, not something the newer stations need.
+    def test_other_profiles_take_the_default_switch_delay(self):
+        # No profile needs a switch delay of its own, slow tower included: the
+        # writer's window is what covers a station that lags.
         for device_cls in (EL100V2, AC500):
             switches = device_cls().get_switch_fields()
             self.assertTrue(switches)
