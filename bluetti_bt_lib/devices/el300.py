@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from ..enums import BatteryStatus, EcoMode, DisplayMode, ChargingMode, WorkingModeEL300
+from ..enums import BatteryStatus, EcoMode, DisplayMode, ChargingMode, WorkingModeV2alt
 from ..fields import (
     FieldName,
     UIntField,
@@ -51,8 +51,8 @@ class EL300(BaseDeviceV2):
                 # UPS working mode: V2 portables keep it at 2005 and use
                 # different values than the V1 UpsMode register (3001). The
                 # Elite 300 numbers them differently again (Customized UPS
-                # reads 3), see WorkingModeEL300.
-                SelectField(FieldName.CTRL_UPS_MODE, 2005, WorkingModeEL300),
+                # reads 3), see WorkingModeV2alt.
+                SelectField(FieldName.CTRL_UPS_MODE, 2005, WorkingModeV2alt),
                 # UPS grid-charge enable; the AC300 exposes the same function
                 # as ctrl_grid_charge_on (register 3011 there).
                 SwitchField(FieldName.CTRL_GRID_CHARGE_ON, 2008),
