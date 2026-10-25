@@ -154,7 +154,7 @@ class TestDeviceWriter(unittest.IsolatedAsyncioTestCase):
             _select_verification_delay(fast),
             DEFAULT_VERIFICATION_WINDOW_SECONDS,
         )
-        self.assertEqual(DEFAULT_VERIFICATION_WINDOW_SECONDS, 3.0)
+        self.assertEqual(DEFAULT_VERIFICATION_WINDOW_SECONDS, 3.5)
 
         # A field-declared window wins over the default.
         slow = NumberField(

@@ -28,8 +28,10 @@ from ..devices.charger2 import CHARGER2, CHARGER2_CONTROL_STATES
 VERIFICATION_FIRST_READ_SECONDS = 1.0
 VERIFICATION_REREAD_SECONDS = 0.5
 
-# Window used when a field does not declare its own.
-DEFAULT_VERIFICATION_WINDOW_SECONDS = 3.0
+# Window used when a field does not declare its own. The AC300's registers can
+# lag a control by more than three seconds, and the extra half second only costs
+# a write that has already failed five read-backs.
+DEFAULT_VERIFICATION_WINDOW_SECONDS = 3.5
 
 
 def _expected_readback(field_obj, value: Any) -> Any:
