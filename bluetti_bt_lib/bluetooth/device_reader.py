@@ -112,12 +112,23 @@ class LinkStats:
     """Cycles in a row that had an abort, not counting the one in progress."""
 
 
+def bluez_adapter_kwargs(adapter: str | None) -> dict[str, Any]:
+    """Keyword arguments that tie a bleak scanner or client to one adapter.
+
+    ``adapter`` is a BlueZ adapter name such as ``"hci1"``. Without one, bleak
+    uses the system's default adapter, which is what every caller got before
+    the option existed.
+    """
+    return {"bluez": {"adapter": adapter}} if adapter else {}
+
+
 class DeviceReaderConfig:
     def __init__(
         self,
         timeout: int = 60,
         use_encryption: bool = False,
         max_attempts: int = 10,
+        adapter: str | None = None,
     ):
         self.timeout = timeout
         self.use_encryption = use_encryption
@@ -125,6 +136,10 @@ class DeviceReaderConfig:
         # time budget on a device that is gone; a poller that retries on its
         # own can ask for fewer (upstream PR #67 suggests 3).
         self.max_attempts = max_attempts
+        # Bluetooth adapter to scan and connect with (BlueZ name, e.g. "hci1"),
+        # for a host with a second adapter such as a USB dongle with an
+        # external antenna. None keeps the system's default adapter.
+        self.adapter = adapter
 
 
 class DeviceReader:
@@ -204,8 +219,13 @@ class DeviceReader:
             if self.ble_client:
                 self.device = None
             else:
+                # The device found by a scanner on an adapter carries that
+                # adapter in its BlueZ path, so the connection below goes out
+                # through the same adapter.
                 self.device = await BleakScanner.find_device_by_address(
-                    self.mac, timeout=5
+                    self.mac,
+                    timeout=5,
+                    **bluez_adapter_kwargs(self.config.adapter),
                 )
 
                 if self.device is None:
@@ -222,6 +242,7 @@ class DeviceReader:
                     self.device,
                     self.device.name or "Unknown Device",
                     max_attempts=self.config.max_attempts,
+                    **bluez_adapter_kwargs(self.config.adapter),
                 )
 
             # _notified_client tracks the client whose subscription is

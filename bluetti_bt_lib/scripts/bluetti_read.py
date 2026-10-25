@@ -9,7 +9,9 @@ from ..utils.device_builder import build_device
 from ..fields import FieldName, get_unit
 
 
-async def async_read_device(address: str, type: str, encryption: bool):
+async def async_read_device(
+    address: str, type: str, encryption: bool, adapter: str | None = None
+):
     built = build_device(type + "12345678")
 
     if built is None:
@@ -19,7 +21,10 @@ async def async_read_device(address: str, type: str, encryption: bool):
     print("Client created")
 
     reader = DeviceReader(
-        address, built, asyncio.Future, DeviceReaderConfig(use_encryption=encryption)
+        address,
+        built,
+        asyncio.Future,
+        DeviceReaderConfig(use_encryption=encryption, adapter=adapter),
     )
 
     print("Reader created")
@@ -47,6 +52,12 @@ def start():
     parser.add_argument(
         "-e", "--encryption", type=bool, help="Add this if encryption is needed"
     )
+    parser.add_argument(
+        "-a",
+        "--adapter",
+        type=str,
+        help="Bluetooth adapter to use (BlueZ name, e.g. hci1); default adapter if omitted",
+    )
     args = parser.parse_args()
 
     if args.mac is None or args.type is None:
@@ -55,4 +66,6 @@ def start():
 
     logging.basicConfig(level=logging.WARNING)
 
-    asyncio.run(async_read_device(args.mac, args.type, args.encryption))
+    asyncio.run(
+        async_read_device(args.mac, args.type, args.encryption, args.adapter)
+    )

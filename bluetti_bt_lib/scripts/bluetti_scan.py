@@ -8,10 +8,11 @@ from typing import List
 from bleak import BleakScanner
 from bleak.backends.device import BLEDevice
 
+from ..bluetooth.device_reader import bluez_adapter_kwargs
 from ..utils.device_info import get_type_by_bt_name
 
 
-async def scan_async(custom_regex, scan_time):
+async def scan_async(custom_regex, scan_time, adapter=None):
     # maybe there is some other trigger we would want to stop scan on?
     stop_event = asyncio.Event()
     # We can set the above event to prematurely stop the scan e.g. with `stop_event.set()`
@@ -35,7 +36,7 @@ async def scan_async(custom_regex, scan_time):
                 found.append(device.address)
                 print([result, device.address])
 
-    async with BleakScanner(callback):
+    async with BleakScanner(callback, **bluez_adapter_kwargs(adapter)):
         try:
             await asyncio.wait_for(stop_event.wait(), scan_time)
         except (asyncio.exceptions.CancelledError, asyncio.TimeoutError):
@@ -57,11 +58,17 @@ def start():
         default=5,
         help="How long to scan for devices (seconds)",
     )
+    parser.add_argument(
+        "-a",
+        "--adapter",
+        type=str,
+        help="Bluetooth adapter to use (BlueZ name, e.g. hci1); default adapter if omitted",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.WARNING)
 
-    asyncio.run(scan_async(args.regex, args.scan_time))
+    asyncio.run(scan_async(args.regex, args.scan_time, args.adapter))
 
 
 if __name__ == "__main__":

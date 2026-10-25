@@ -9,16 +9,25 @@ from typing import Any
 from bleak import BleakClient
 
 from ..bluetooth import DeviceWriter, DeviceWriterConfig
-from ..bluetooth.device_reader import DeviceReader, DeviceReaderConfig
+from ..bluetooth.device_reader import (
+    DeviceReader,
+    DeviceReaderConfig,
+    bluez_adapter_kwargs,
+)
 from ..devices.charger2 import CHARGER2
 from ..utils.device_builder import build_device
 from bleak.exc import BleakError
 
 
 async def async_write(
-    address: str, type: str, encryption: bool, field: str, value: Any
+    address: str,
+    type: str,
+    encryption: bool,
+    field: str,
+    value: Any,
+    adapter: str | None = None,
 ):
-    client = BleakClient(address)
+    client = BleakClient(address, **bluez_adapter_kwargs(adapter))
     built = build_device(type + "12345678")
 
     if built is None:
@@ -41,7 +50,7 @@ async def async_write(
             address,
             built,
             asyncio.Future,
-            DeviceReaderConfig(use_encryption=encryption),
+            DeviceReaderConfig(use_encryption=encryption, adapter=adapter),
             lock=polling_lock,
             ble_client=client,
         )
@@ -102,6 +111,12 @@ def start():
     parser.add_argument(
         "-e", "--encryption", type=bool, help="Add this if encryption is needed"
     )
+    parser.add_argument(
+        "-a",
+        "--adapter",
+        type=str,
+        help="Bluetooth adapter to use (BlueZ name, e.g. hci1); default adapter if omitted",
+    )
     parser.add_argument("field", type=str, help="Field name (ctrl_dc f.ex.)")
     args = parser.parse_args()
 
@@ -138,6 +153,7 @@ def start():
             args.encryption,
             args.field,
             value,
+            args.adapter,
         )
     )
 
