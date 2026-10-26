@@ -121,6 +121,14 @@ class TestCharger2(unittest.TestCase):
             parsed = self.device.parse(15626, bytes.fromhex("0368"))
         self.assertEqual(parsed, {})
 
+    def test_late_answer_from_15600_is_not_read_as_on(self):
+        # 0x5529 ends in 0b01, but 0x55 is no mode: a late answer, not "on".
+        for hex_value in ("5529", "AA2A", "0001"):
+            with self.subTest(register_value=hex_value):
+                with self.assertLogs("bluetti_bt_lib.base_devices.bluetti_device", "WARNING"):
+                    parsed = self.device.parse(15626, bytes.fromhex(hex_value))
+                self.assertEqual(parsed, {})
+
     def test_reverse_charging_compose_keeps_the_other_bits(self):
         switch = Charger2ReverseChargingField(
             FieldName.CTRL_REVERSE_CHARGING, 15626
@@ -136,6 +144,8 @@ class TestCharger2(unittest.TestCase):
         self.assertIsNone(switch.compose(0x0468, True))
         self.assertIsNone(switch.compose(0x046A, 1))
         self.assertIsNone(mode.compose(0x046A, "TURBO"))
+        self.assertIsNone(switch.compose(0x5529, True))
+        self.assertIsNone(mode.compose(0x5529, "PULSE"))
 
     def test_reverse_charging_controls_require_read_modify_write(self):
         for field_name, value in (

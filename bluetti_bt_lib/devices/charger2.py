@@ -75,6 +75,23 @@ REVERSE_CHARGING_ON = 0b01
 REVERSE_CHARGING_OFF = 0b10
 
 
+def _reverse_charging_state(value: int) -> int | None:
+    """The on/off bits of 15626, or None if the word is not a known layout.
+
+    The high byte must hold a known mode as well: a late answer from another
+    register (0x5529 from 15600 was seen in a test read) would otherwise look
+    like "on".
+    """
+    modes = {mode.value for mode in ReverseChargingMode}
+    state = value & 0b11
+    if value >> 8 not in modes or state not in (
+        REVERSE_CHARGING_ON,
+        REVERSE_CHARGING_OFF,
+    ):
+        return None
+    return state
+
+
 class Charger2ReverseChargingField(SwitchField):
     """Reverse charging on/off, the low two bits of register 15626.
 
@@ -84,7 +101,7 @@ class Charger2ReverseChargingField(SwitchField):
 
     def parse(self, data: bytes) -> bool:
         value = struct.unpack("!H", data)[0]
-        state = value & 0b11
+        state = _reverse_charging_state(value)
 
         if state == REVERSE_CHARGING_ON:
             return True
@@ -101,7 +118,7 @@ class Charger2ReverseChargingField(SwitchField):
         """Register value that sets this switch and keeps everything else."""
         if not isinstance(value, bool):
             return None
-        if current & 0b11 not in (REVERSE_CHARGING_ON, REVERSE_CHARGING_OFF):
+        if _reverse_charging_state(current) is None:
             return None
         state = REVERSE_CHARGING_ON if value else REVERSE_CHARGING_OFF
         return (current & ~0b11 & 0xFFFF) | state
@@ -126,7 +143,7 @@ class Charger2ReverseChargingModeField(SelectField):
     def compose(self, current: int, value) -> int | None:
         """Register value that selects this mode and keeps the low byte."""
         option = self.to_option(value)
-        if option is None:
+        if option is None or _reverse_charging_state(current) is None:
             return None
         return (option.value << 8) | (current & 0x00FF)
 
