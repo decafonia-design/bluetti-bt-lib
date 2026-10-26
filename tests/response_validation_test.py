@@ -90,6 +90,99 @@ class TestRegisterValidation(unittest.TestCase):
         self.assertFalse(registers.is_valid_response(bytes(response)))
 
 
+class LateMock(ClientMockNoEncryption):
+    """Answers every request after a delay, like a busy station.
+
+    ``first`` is the delay of the first answers, then ``latency``. Answers are
+    not lost, only late: a request that times out and is asked again ends up
+    answered twice.
+    """
+
+    def __init__(self, latency: float, first: list[float] | None = None) -> None:
+        super().__init__()
+        self.latency = latency
+        self.first = list(first or [])
+        self.commands: list[bytes] = []
+        self.tasks: list[asyncio.Task] = []
+
+    async def write_gatt_char(self, char, data, response=None) -> None:
+        request = bytes(data)
+        self.commands.append(request)
+        answers = []
+        callback = self._callback
+
+        async def collect(c, content):
+            answers.append(bytes(content))
+
+        self._callback = collect
+        await super().write_gatt_char(char, request, response)
+        self._callback = callback
+
+        delay = self.first.pop(0) if self.first else self.latency
+
+        async def later():
+            await asyncio.sleep(delay)
+            for answer in answers:
+                if self._callback is not None:
+                    await self._callback(char, bytearray(answer))
+
+        self.tasks.append(asyncio.create_task(later()))
+
+
+class TestSecondAnswerToARetry(unittest.IsolatedAsyncioTestCase):
+    async def test_second_answer_is_not_taken_by_the_next_request(self):
+        # The reader waits 0.3 s. The first answer takes 0.45 s, so the read is
+        # asked again; that second ask is answered too (0.25 s later), while
+        # the next request of the same size is already waiting. That answer
+        # must not end up as the value of the next register.
+        ble_mock = LateMock(latency=0.25, first=[0.45])
+        ble_mock.add_r_int(PACK_NUM_REGISTER, 4)
+        ble_mock.add_r_int(PACK_NUM_REGISTER + 1, 7)
+        reader = DeviceReader(
+            "00:11:00:11:00:11",
+            AC60(),
+            asyncio.get_running_loop().create_future,
+            ble_client=ble_mock,
+        )
+
+        with patch.object(device_reader, "RESPONSE_TIMEOUT_SECONDS", 0.3), patch.object(
+            device_reader, "RETRY_PAUSE_SECONDS", 0
+        ), patch.object(device_reader, "STRAY_ANSWER_SECONDS", 1):
+            first = await reader.read_locked(
+                [ReadableRegisters(PACK_NUM_REGISTER, 1)], raw=True
+            )
+            second = await reader.read_locked(
+                [ReadableRegisters(PACK_NUM_REGISTER + 1, 1)], raw=True
+            )
+
+        self.assertEqual(first, {PACK_NUM_REGISTER: b"\x00\x04"})
+        self.assertEqual(second, {PACK_NUM_REGISTER + 1: b"\x00\x07"})
+        await asyncio.gather(*ble_mock.tasks)
+
+    async def test_no_wait_when_the_first_ask_was_answered(self):
+        ble_mock = LateMock(latency=0)
+        ble_mock.add_r_int(PACK_NUM_REGISTER, 4)
+        reader = DeviceReader(
+            "00:11:00:11:00:11",
+            AC60(),
+            asyncio.get_running_loop().create_future,
+            ble_client=ble_mock,
+        )
+        drained = []
+
+        async def drain(registers):
+            drained.append(registers)
+        reader._drain_stray_answer = drain
+
+        values = await reader.read_locked(
+            [ReadableRegisters(PACK_NUM_REGISTER, 1)], raw=True
+        )
+
+        self.assertEqual(values, {PACK_NUM_REGISTER: b"\x00\x04"})
+        self.assertEqual(drained, [])
+        await asyncio.gather(*ble_mock.tasks)
+
+
 class TestReaderValidation(unittest.IsolatedAsyncioTestCase):
     async def _read_pack_num(self, ble_mock, registers=None):
         reader = DeviceReader(

@@ -41,6 +41,14 @@ READ_ATTEMPTS = 2
 # retry fired off immediately can land in the same busy moment.
 RETRY_PAUSE_SECONDS = 0.2
 
+# A read that was asked twice can be answered twice: the first answer settles
+# the request, the second one is still on its way. Sent on at once, the next
+# request of the same size would take that second answer for its own (a
+# Charger 2 filed the answer to 15584 under 15600, and that of 15600 under
+# 15626). So after a retried read the reader waits this long for the stray
+# answer, discarding it, before it asks anything else.
+STRAY_ANSWER_SECONDS = 3
+
 # How long a fresh connection gets to finish its key exchange. The device
 # starts the exchange on its own once notifications are on, so it normally
 # takes a second or two.
@@ -987,7 +995,9 @@ class DeviceReader:
         while True:
             attempt += 1
             try:
-                return await self._send_once(registers, attempt, attempt == attempts)
+                response = await self._send_once(
+                    registers, attempt, attempt == attempts
+                )
             except ResponseTimeout:
                 if attempt == attempts:
                     raise
@@ -995,6 +1005,34 @@ class DeviceReader:
                 self.link_stats.retried += 1
                 self._retry_pending = True
                 await asyncio.sleep(RETRY_PAUSE_SECONDS)
+                continue
+
+            if attempt > 1:
+                await self._drain_stray_answer(registers)
+            return response
+
+    async def _drain_stray_answer(self, registers: DeviceRegister) -> None:
+        """Let the second answer to a retried read land while nothing is pending.
+
+        With no request in flight the notification handler only collects what
+        arrives, so the stray answer cannot settle a later request. Stops as
+        soon as an answer of this size is in, or after STRAY_ANSWER_SECONDS when
+        the station never sends one.
+        """
+        self.notify_response = bytearray()
+        size = registers.response_size()
+        deadline = time.monotonic() + STRAY_ANSWER_SECONDS
+
+        while len(self.notify_response) < size and time.monotonic() < deadline:
+            await asyncio.sleep(0.05)
+
+        if self.notify_response:
+            self.logger.debug(
+                "Discarded a second answer to %s: %s",
+                registers,
+                bytes(self.notify_response[:RX_SAMPLE_BYTES]).hex(),
+            )
+        self.notify_response = bytearray()
 
     async def _send_once(
         self, registers: DeviceRegister, attempt: int, last_attempt: bool
