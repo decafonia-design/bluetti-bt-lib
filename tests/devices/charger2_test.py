@@ -1,10 +1,15 @@
 import unittest
 
+from decimal import Decimal
+
 from bluetti_bt_lib.devices.charger2 import (
     CHARGER2,
+    Charger2ReverseChargingField,
+    Charger2ReverseChargingModeField,
     Charger2SilentChargingField,
     Charger2SystemSwitchField,
 )
+from bluetti_bt_lib.enums import ReverseChargingMode
 from bluetti_bt_lib.fields import FieldName
 
 
@@ -89,6 +94,80 @@ class TestCharger2(unittest.TestCase):
             with self.subTest(field=field_name):
                 with self.assertRaises(ValueError):
                     self.device.build_write_command(field_name, True)
+
+    def test_reverse_charging_states_seen_on_a_device(self):
+        # 0x0169 trickle on, 0x0269 pulse on, 0x0469 top-up on,
+        # 0x046A top-up selected but off (dumps of 26 Oct 2026).
+        expected = {
+            "0169": (True, ReverseChargingMode.TRICKLE),
+            "0269": (True, ReverseChargingMode.PULSE),
+            "0469": (True, ReverseChargingMode.TOP_UP),
+            "046A": (False, ReverseChargingMode.TOP_UP),
+            "016A": (False, ReverseChargingMode.TRICKLE),
+        }
+
+        for hex_value, (on, mode) in expected.items():
+            with self.subTest(register_value=hex_value):
+                parsed = self.device.parse(15626, bytes.fromhex(hex_value))
+                self.assertEqual(
+                    parsed[FieldName.CTRL_REVERSE_CHARGING.value], on
+                )
+                self.assertEqual(
+                    parsed[FieldName.CTRL_REVERSE_CHARGING_MODE.value], mode
+                )
+
+    def test_unknown_reverse_charging_value_skips_only_that_field(self):
+        with self.assertLogs("bluetti_bt_lib.base_devices.bluetti_device", "WARNING"):
+            parsed = self.device.parse(15626, bytes.fromhex("0368"))
+        self.assertEqual(parsed, {})
+
+    def test_reverse_charging_compose_keeps_the_other_bits(self):
+        switch = Charger2ReverseChargingField(
+            FieldName.CTRL_REVERSE_CHARGING, 15626
+        )
+        mode = Charger2ReverseChargingModeField(
+            FieldName.CTRL_REVERSE_CHARGING_MODE, 15626
+        )
+
+        self.assertEqual(switch.compose(0x046A, True), 0x0469)
+        self.assertEqual(switch.compose(0x0469, False), 0x046A)
+        self.assertEqual(mode.compose(0x046A, "PULSE"), 0x026A)
+        self.assertEqual(mode.compose(0x0169, ReverseChargingMode.TOP_UP), 0x0469)
+        self.assertIsNone(switch.compose(0x0468, True))
+        self.assertIsNone(switch.compose(0x046A, 1))
+        self.assertIsNone(mode.compose(0x046A, "TURBO"))
+
+    def test_reverse_charging_controls_require_read_modify_write(self):
+        for field_name, value in (
+            (FieldName.CTRL_REVERSE_CHARGING.value, True),
+            (FieldName.CTRL_REVERSE_CHARGING_MODE.value, "PULSE"),
+        ):
+            with self.subTest(field=field_name):
+                with self.assertRaises(ValueError):
+                    self.device.build_write_command(field_name, value)
+
+    def test_reverse_charging_power(self):
+        parsed = self.device.parse(15631, bytes.fromhex("0064"))
+        self.assertEqual(parsed[FieldName.REVERSE_CHARGING_POWER.value], 100)
+
+    def test_starter_battery_values_are_signed(self):
+        # Reverse charging read 0xFCE0 (15540) and 0xFF9C (15542): -8 A, -100 W.
+        # From the alternator they are positive: 59.84 A, 778 W.
+        cases = {
+            (15540, "FCE0"): Decimal("-8.00"),
+            (15542, "FF9C"): Decimal("-100"),
+            (15540, "1760"): Decimal("59.84"),
+            (15542, "030A"): Decimal("778"),
+        }
+        names = {
+            15540: FieldName.B_ALT_CURRENT.value,
+            15542: FieldName.B_ALT_IO_POWER.value,
+        }
+
+        for (address, hex_value), expected in cases.items():
+            with self.subTest(address=address, register_value=hex_value):
+                parsed = self.device.parse(address, bytes.fromhex(hex_value))
+                self.assertEqual(parsed[names[address]], expected)
 
 
 if __name__ == "__main__":
