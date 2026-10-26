@@ -4,12 +4,13 @@ from decimal import Decimal
 
 from bluetti_bt_lib.devices.charger2 import (
     CHARGER2,
+    Charger2ChargingPriorityField,
     Charger2ReverseChargingField,
     Charger2ReverseChargingModeField,
     Charger2SilentChargingField,
     Charger2SystemSwitchField,
 )
-from bluetti_bt_lib.enums import ReverseChargingMode
+from bluetti_bt_lib.enums import ChargingPriority, ReverseChargingMode
 from bluetti_bt_lib.fields import FieldName
 
 
@@ -179,6 +180,39 @@ class TestCharger2(unittest.TestCase):
                 parsed = self.device.parse(address, bytes.fromhex(hex_value))
                 self.assertEqual(parsed[names[address]], expected)
 
+
+    def test_charging_priority_states_seen_on_a_device(self):
+        for hex_value, priority in (
+            ("0016", ChargingPriority.BLUETTI_PRODUCTS),
+            ("0026", ChargingPriority.PORTABLE_POWER_STATION),
+        ):
+            with self.subTest(register_value=hex_value):
+                parsed = self.device.parse(15625, bytes.fromhex(hex_value))
+                self.assertEqual(
+                    parsed[FieldName.CTRL_CHARGING_PRIORITY.value], priority
+                )
+
+    def test_unknown_charging_priority_layout_is_skipped(self):
+        # A late answer (0x5529 from 15600, 0x0064 from 15631, 0x0037 a state
+        # of charge) or bits not seen yet: skipped, not guessed.
+        for hex_value in ("5529", "0064", "0037", "0036", "0017"):
+            with self.subTest(register_value=hex_value):
+                with self.assertLogs("bluetti_bt_lib.base_devices.bluetti_device", "WARNING"):
+                    parsed = self.device.parse(15625, bytes.fromhex(hex_value))
+                self.assertEqual(parsed, {})
+
+    def test_charging_priority_compose(self):
+        field = Charger2ChargingPriorityField(
+            FieldName.CTRL_CHARGING_PRIORITY, 15625
+        )
+        self.assertEqual(field.compose(0x0016, "PORTABLE_POWER_STATION"), 0x0026)
+        self.assertEqual(field.compose(0x0026, ChargingPriority.BLUETTI_PRODUCTS), 0x0016)
+        self.assertIsNone(field.compose(0x0016, "TURBO"))
+        self.assertIsNone(field.compose(0x5529, "BLUETTI_PRODUCTS"))
+        with self.assertRaises(ValueError):
+            self.device.build_write_command(
+                FieldName.CTRL_CHARGING_PRIORITY.value, "BLUETTI_PRODUCTS"
+            )
 
 if __name__ == "__main__":
     unittest.main()

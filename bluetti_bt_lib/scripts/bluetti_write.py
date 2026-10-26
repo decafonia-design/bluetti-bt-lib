@@ -26,6 +26,7 @@ async def async_write(
     field: str,
     value: Any,
     adapter: str | None = None,
+    timeout: int = 15,
 ):
     client = BleakClient(address, **bluez_adapter_kwargs(adapter))
     built = build_device(type + "12345678")
@@ -79,7 +80,7 @@ async def async_write(
         writer = DeviceWriter(
             client,
             built,
-            DeviceWriterConfig(use_encryption=encryption),
+            DeviceWriterConfig(timeout=timeout, use_encryption=encryption),
             lock=polling_lock,
             reader=reader,
         )
@@ -92,7 +93,7 @@ async def async_write(
         writer = DeviceWriter(
             client,
             built,
-            DeviceWriterConfig(use_encryption=encryption),
+            DeviceWriterConfig(timeout=timeout, use_encryption=encryption),
         )
 
     print("Writer created")
@@ -121,6 +122,13 @@ def start():
         "--adapter",
         type=str,
         help="Bluetooth adapter to use (BlueZ name, e.g. hci1); default adapter if omitted",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=int,
+        default=15,
+        help="Seconds the whole write may take: connect, key exchange, write and "
+        "read-back (default 15; an encrypted station can need more)",
     )
     parser.add_argument("field", type=str, help="Field name (ctrl_dc f.ex.)")
     args = parser.parse_args()
@@ -159,6 +167,7 @@ def start():
             args.field,
             value,
             args.adapter,
+            args.timeout,
         )
     )
 

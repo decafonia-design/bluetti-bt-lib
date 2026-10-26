@@ -47,6 +47,7 @@ class FieldName(Enum):
     CTRL_ECO_MIN_POWER_DC = "ctrl_eco_min_power_dc"
     CTRL_ECO_TIME_MODE = "ctrl_eco_time_mode"
     CTRL_ECO_TIME_MODE_AC = "ctrl_eco_time_mode_ac"
+    CTRL_CHARGING_PRIORITY = "ctrl_charging_priority"
     CTRL_ECO_TIME_MODE_DC = "ctrl_eco_time_mode_dc"
     CTRL_GENERATOR = "ctrl_generator"
     CTRL_GRID_CHARGE_ON = "ctrl_grid_charge_on"

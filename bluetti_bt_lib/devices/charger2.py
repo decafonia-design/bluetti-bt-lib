@@ -2,7 +2,7 @@ import struct
 
 from ..base_devices import BaseDeviceV2
 from ..bluetooth import ReadableRegisters
-from ..enums import ReverseChargingMode
+from ..enums import ChargingPriority, ReverseChargingMode
 from ..fields import (
     SelectField,
     SwitchField,
@@ -148,6 +148,48 @@ class Charger2ReverseChargingModeField(SelectField):
         return (option.value << 8) | (current & 0x00FF)
 
 
+# Register 15625 holds "Priority Charging" (Advanced Settings in the app) in
+# bits 4-5, with the same pairs as 15600: 0b01 BLUETTI Products, 0b10 Portable
+# Power Station. Seen on a Charger 2: 0x0016 and 0x0026. The other bits stayed
+# 0x06 and are not known, so only that layout is accepted; anything else (a
+# late answer from another register, or a setting not seen yet) is skipped
+# rather than guessed.
+CHARGING_PRIORITY_MASK = 0x30
+CHARGING_PRIORITY_REST = 0x06
+
+
+def _charging_priority(value: int) -> ChargingPriority | None:
+    if value & ~CHARGING_PRIORITY_MASK & 0xFFFF != CHARGING_PRIORITY_REST:
+        return None
+    try:
+        return ChargingPriority((value & CHARGING_PRIORITY_MASK) >> 4)
+    except ValueError:
+        return None
+
+
+class Charger2ChargingPriorityField(SelectField):
+    """Priority Charging, bits 4-5 of register 15625."""
+
+    def __init__(self, name: FieldName, address: int):
+        super().__init__(name, address, ChargingPriority)
+
+    def parse(self, data: bytes) -> ChargingPriority:
+        value = struct.unpack("!H", data)[0]
+        priority = _charging_priority(value)
+        if priority is None:
+            raise ValueError(
+                f"Unexpected Charger 2 charging priority value: 0x{value:04X}"
+            )
+        return priority
+
+    def compose(self, current: int, value) -> int | None:
+        """Register value that selects this priority and keeps the other bits."""
+        option = self.to_option(value)
+        if option is None or _charging_priority(current) is None:
+            return None
+        return (current & ~CHARGING_PRIORITY_MASK & 0xFFFF) | (option.value << 4)
+
+
 class CHARGER2(BaseDeviceV2):
     def __init__(self):
         super().__init__(
@@ -185,6 +227,10 @@ class CHARGER2(BaseDeviceV2):
                     FieldName.CTRL_SILENT_CHARGING,
                     15600,
                 ),
+                Charger2ChargingPriorityField(
+                    FieldName.CTRL_CHARGING_PRIORITY,
+                    15625,
+                ),
                 Charger2ReverseChargingField(
                     FieldName.CTRL_REVERSE_CHARGING,
                     15626,
@@ -204,7 +250,7 @@ class CHARGER2(BaseDeviceV2):
         )
 
     def build_write_command(self, name: str, value):
-        # These controls share register 15600 or 15626. Their writes must be
+        # These controls share register 15600, 15625 or 15626. Their writes must be
         # constructed by DeviceWriter using a fresh read-modify-write.
         # Do not construct a standalone command for any of them here.
         if name in (
@@ -212,6 +258,7 @@ class CHARGER2(BaseDeviceV2):
             FieldName.CTRL_SILENT_CHARGING.value,
             FieldName.CTRL_REVERSE_CHARGING.value,
             FieldName.CTRL_REVERSE_CHARGING_MODE.value,
+            FieldName.CTRL_CHARGING_PRIORITY.value,
         ):
             raise ValueError(
                 "Charger 2 controls require a read-modify-write operation"

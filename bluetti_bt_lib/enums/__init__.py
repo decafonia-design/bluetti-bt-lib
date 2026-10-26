@@ -1,4 +1,5 @@
 from .charging_mode import *
+from .charging_priority import *
 from .display_mode import *
 from .eco_mode import *
 from .led_mode import *

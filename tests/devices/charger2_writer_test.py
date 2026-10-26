@@ -251,5 +251,17 @@ class TestCharger2Writer(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.writes, [])
 
 
+    async def test_charging_priority_keeps_the_other_bits(self):
+        self.client.add_r_int(15625, 0x0016)
+
+        result = await self.writer.write_verified(
+            "ctrl_charging_priority", "PORTABLE_POWER_STATION"
+        )
+
+        self.assertTrue(result.verified)
+        command = struct.unpack("!HHHH", self.writes[0][:8])
+        self.assertEqual(command[1], 15625)
+        self.assertEqual(command[2], 0x0026)
+
 if __name__ == "__main__":
     unittest.main()
