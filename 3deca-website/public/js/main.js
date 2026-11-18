@@ -40,26 +40,6 @@
     });
   }
 
-  /* ---------- time-of-day timecode (25 fps) on the hero photo ---------- */
-  var tcEls = $$("[data-timecode]");
-  if (tcEls.length) {
-    var pad = function (n) { return (n < 10 ? "0" : "") + n; };
-    var tc = function () {
-      var d = new Date();
-      return pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds()) + ":" + pad(Math.floor(d.getMilliseconds() / 40));
-    };
-    if (reduceMotion) {
-      tcEls.forEach(function (el) { el.textContent = tc(); });
-    } else {
-      var last = 0;
-      var loop = function (t) {
-        if (t - last >= 40) { last = t; var v = tc(); tcEls.forEach(function (el) { el.textContent = v; }); }
-        requestAnimationFrame(loop);
-      };
-      requestAnimationFrame(loop);
-    }
-  }
-
   /* ---------- shop filters ---------- */
   var chips = $$("[data-filter]");
   var cardList = $("[data-cards]");

@@ -5,17 +5,18 @@ De map `public/` **is** de website. Je zet die map online en klaar.
 
 ## Wat er nieuw is
 
-- **Modernistisch ontwerp**: wit en lichtgrijs, strak raster, zwarte grotesk-letter (Archivo), één
-  signaalkleur (oranje) en productcodes (3D-01 … 3D-07) zoals in een catalogus.
+- **Sober, minimalistisch ontwerp**: wit en lichtgrijs, strak raster, rustige zwarte letter (Archivo),
+  kleine titels en geen effecten. Oranje komt alleen terug in het kleine logovierkantje. Producten hebben
+  een productcode (3D-01 … 3D-07), zoals in een catalogus.
 - **Duidelijke productfoto's**: elk product staat vrijstaand op een rustige lichtgrijze studio-achtergrond met
   zachte schaduw. Die zijn gemaakt uit je eigen foto's. Ga je met de muis over een product, dan zie je het in
   gebruik op de set.
-- **Betere beschrijvingen**: per product een tekst vanuit het gebruik op de set, een lijst "Why mixers like it"
-  en een specificatietabel. Alles is gebaseerd op de informatie van de oude site, er is niets verzonnen.
-- **Shop met filters** per systeem (Zaxcom, Sennheiser, batterijen), een tegel "Need a different fit?" voor
-  maatwerk, een strook "In use" met foto's van de set, reviews, en een FAQ.
+- **Betere beschrijvingen**: per product een beschrijving, een lijst met kenmerken ("Features") en een
+  specificatietabel. Alles is gebaseerd op de informatie van de oude site, er is niets verzonnen.
+- **Collectie met filters** per systeem (Zaxcom, Sennheiser, batterijen), een rustige tegel "Need a different fit?"
+  voor maatwerk, een strook "In use" met foto's van de set, een korte "About", reviews en een FAQ.
 - **Productpagina's**: grote fotoviewer (studio- en setfoto's), keuzeknoppen per variant die de prijs live
-  aanpassen, een aantalkeuze, "Add to order", en "You may also need" met gerelateerde producten.
+  aanpassen, een aantalkeuze, "Add to order", en "Related products".
 - **Bestelmodule**: bezoekers stellen een bestelling samen (met productcodes). Ze zien het subtotaal ex btw
   en hoeveel ze nog nodig hebben voor gratis EU-verzending. Bij verzenden opent hun mailprogramma met
   alles ingevuld.
@@ -79,5 +80,5 @@ Open daarna http://localhost:8000.
   Op de nieuwe site staat overal LBP61. Klopt dat?
 - De ZMT-mount krijgt de vermelding "rubber-coated magnet". Dat komt uit een review van een klant.
 - De bestelmodule groet in de e-mail met "Hi Jan". Dat kun je aanpassen in `public/js/main.js`.
-- De korte slogans per product en de uitgebreidere beschrijvingen zijn herschreven op basis van de oude teksten. Lees ze even na.
+- De beschrijvingen per product en de tekst bij "About" zijn herschreven op basis van de oude teksten. Lees ze even na.
 - Webshop: zie `WEBSHOP.md` voor de opties, kosten en mijn advies.

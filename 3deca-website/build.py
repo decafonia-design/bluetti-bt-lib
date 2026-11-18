@@ -182,7 +182,7 @@ def footer(root):
     <div class="footer-grid">
       <div class="footer-brand">
         <a class="footer-mark" href="{home}" aria-label="3Deca, home">{WORDMARK}</a>
-        <p>Set gear by a sound mixer, for sound mixers. Designed and used on set.</p>
+        <p>Set gear for production sound.</p>
       </div>
       <div>
         <h2 class="footer-h">Products</h2>
@@ -207,7 +207,6 @@ def footer(root):
     </div>
     <div class="footer-bottom">
       <p>© 2023–{YEAR} {SITE['owner']} · 3Deca</p>
-      <p>No cookies. No trackers.</p>
     </div>
   </div>
 </footer>
@@ -230,7 +229,7 @@ def product_card(root, p):
           </span>
           <span class="card-meta"><span class="code">{p['code']}</span><span>{e(p['brand'])}</span></span>
           <span class="card-title">{e(p['name'])}</span>
-          <span class="card-tagline">{e(p['tagline'])}</span>
+          <span class="card-tagline">{e(p['fits'])}</span>
           <span class="card-price">{price_label(p)}</span>
         </a>
       </li>"""
@@ -306,14 +305,12 @@ def build_home():
         for u in C["in_use"]
     )
 
-    featured = next(r for r in C["reviews"] if r.get("featured"))
-    others = "".join(
+    reviews = "".join(
         f"""<li><figure class="review">
             <blockquote><p>{e(r['quote'])}</p></blockquote>
-            <figcaption>{e(r['name'])}<span>{e(r['city'])}</span></figcaption>
+            <figcaption>{e(r['name'])}, {e(r['city'])}</figcaption>
           </figure></li>"""
         for r in C["reviews"]
-        if not r.get("featured")
     )
     faq = "".join(
         f"""<details class="faq-item"><summary>{e(f['q'])}</summary><p>{e(f['a'])}</p></details>"""
@@ -346,37 +343,30 @@ def build_home():
   <section class="hero" aria-labelledby="hero-title">
     <div class="container hero-grid">
       <div class="hero-text">
-        <p class="eyebrow">{e(intro['eyebrow'])}</p>
-        <h1 id="hero-title" class="hero-title">Built on set.<br><span class="hero-accent">For the set.</span></h1>
+        <h1 id="hero-title" class="hero-title">{e(intro['title'])}</h1>
         <p class="hero-lead">{e(intro['lead'])}</p>
         <div class="hero-actions">
-          <a class="btn btn-ink" href="#shop">Shop the gear <span aria-hidden="true">→</span></a>
-          <a class="btn btn-line" href="#order">Order form</a>
+          <a class="btn btn-ink" href="#shop">View the collection</a>
+          <a class="text-link" href="#order">Order form</a>
         </div>
+        <ul class="facts" role="list">{facts}</ul>
       </div>
       <figure class="hero-media">
         <a class="hero-shot" href="{product_href(root, hero_p['slug'])}">
           {picture(root, intro['hero_image'], intro['hero_alt'], '(min-width: 1000px) 50vw, 100vw', 'hero-img', eager=True)}
-          <span class="tc-chip" aria-hidden="true"><span class="rec-dot"></span>TC <span data-timecode>00:00:00:00</span></span>
         </a>
         <figcaption class="hero-caption">
           <span><span class="code">{hero_p['code']}</span> {e(hero_p['name'])}</span>
-          <a href="{product_href(root, hero_p['slug'])}">{price_label(hero_p)} <span aria-hidden="true">→</span><span class="sr-only"> view {e(hero_p['name'])}</span></a>
+          <a href="{product_href(root, hero_p['slug'])}">{price_label(hero_p)}<span class="sr-only"> · view {e(hero_p['name'])}</span></a>
         </figcaption>
       </figure>
-    </div>
-    <div class="container">
-      <ul class="facts" role="list">{facts}</ul>
     </div>
   </section>
 
   <section class="section shop" id="shop" aria-labelledby="shop-title">
     <div class="container">
       <div class="section-bar">
-        <div>
-          <p class="eyebrow">The collection · {len(PRODUCTS)} products</p>
-          <h2 id="shop-title" class="section-title">Gear that earns its place<br>on your belt.</h2>
-        </div>
+        <h2 id="shop-title" class="section-title">Collection <span class="count">{len(PRODUCTS)} products</span></h2>
         <div class="filters" role="group" aria-label="Filter by system">{filters}</div>
       </div>
       <p class="sr-only" aria-live="polite" data-filter-status></p>
@@ -389,51 +379,33 @@ def build_home():
   <section class="section in-use" id="in-use" aria-labelledby="use-title">
     <div class="container">
       <div class="section-bar">
-        <div>
-          <p class="eyebrow">In use</p>
-          <h2 id="use-title" class="section-title">Tested every shooting day.</h2>
-        </div>
-        <p class="section-lead">Beaches, car rigs, period drama. Every piece started as a fix for a real problem on set.</p>
+        <h2 id="use-title" class="section-title">In use</h2>
       </div>
       <ul class="uses" role="list">{in_use}</ul>
     </div>
   </section>
 
   <section class="section about" id="about" aria-labelledby="about-title">
-    <div class="container about-grid">
+    <div class="container split">
+      <h2 id="about-title" class="section-title">About</h2>
       <div class="about-copy">
-        <p class="eyebrow">About</p>
-        <h2 id="about-title" class="section-title">Made by someone who needed it.</h2>
-        <p class="about-lead">I'm a production sound mixer based in Europe. Every product here started on set, as a fix for something that slowed us down. I use them daily, and so do my colleagues.</p>
-        <p>Questions or suggestions? Contact me any time. Custom bay counts and fits for your case are part of the job.</p>
-        <div class="about-actions">
-          <a class="btn btn-line" href="{SITE['imdb']}" rel="noopener">My credits on IMDb <span aria-hidden="true">↗</span></a>
-          <a class="text-link" href="mailto:{SITE['email']}">{SITE['email']}</a>
-        </div>
-      </div>
-      <div class="about-media">
-        {picture(root, 'urxbeltclip/02', BY_SLUG['urxbeltclip']['images'][1], '(min-width: 900px) 40vw, 100vw')}
+        <p>{e(C['about']['text'])}</p>
+        <p>For questions, custom builds or a commercial invoice, contact <a class="text-link" href="mailto:{SITE['email']}">{SITE['email']}</a>.</p>
+        <p><a class="text-link" href="{SITE['imdb']}" rel="noopener">{SITE['owner']} on IMDb</a></p>
       </div>
     </div>
   </section>
 
   <section class="section reviews" id="reviews" aria-labelledby="reviews-title">
-    <div class="container">
-      <p class="eyebrow" id="reviews-title">What mixers say</p>
-      <figure class="review-featured">
-        <blockquote><p>{e(featured['quote'])}</p></blockquote>
-        <figcaption>{e(featured['name'])}<span>{e(featured['city'])}</span></figcaption>
-      </figure>
-      <ul class="reviews-grid" role="list">{others}</ul>
+    <div class="container split">
+      <h2 id="reviews-title" class="section-title">Reviews</h2>
+      <ul class="reviews-grid" role="list">{reviews}</ul>
     </div>
   </section>
 
   <section class="section faq" id="faq" aria-labelledby="faq-title">
-    <div class="container faq-grid">
-      <div>
-        <p class="eyebrow">FAQ</p>
-        <h2 id="faq-title" class="section-title">Good to know.</h2>
-      </div>
+    <div class="container split">
+      <h2 id="faq-title" class="section-title">FAQ</h2>
       <div class="faq-list">{faq}</div>
     </div>
   </section>
@@ -441,10 +413,7 @@ def build_home():
   <section class="section order" id="order" aria-labelledby="order-title">
     <div class="container">
       <div class="section-bar">
-        <div>
-          <p class="eyebrow">Order</p>
-          <h2 id="order-title" class="section-title">Build your order.</h2>
-        </div>
+        <h2 id="order-title" class="section-title">Order</h2>
         <ul class="order-points" role="list">{points}</ul>
       </div>
 
@@ -534,7 +503,7 @@ def build_product(i, p):
 
     links = checkout_links(p)
     buy = (
-        f'<a class="btn btn-accent" href="#" data-buy hidden>Buy now <span aria-hidden="true">→</span></a>'
+        f'<a class="btn btn-ink" href="#" data-buy hidden>Buy now <span aria-hidden="true">→</span></a>'
         f'<script type="application/json" id="checkout-data">{json.dumps(links)}</script>'
         if links
         else ""
@@ -616,7 +585,7 @@ def build_product(i, p):
       <div class="product-info">
         <p class="product-meta"><span class="code">{p['code']}</span><span>{e(p['brand'])}</span></p>
         <h1 id="product-title" class="product-title">{e(p['name'])}</h1>
-        <p class="product-tagline">{e(p['tagline'])}</p>
+        <p class="product-fits">Fits {e(p['fits'])}</p>
         <p class="product-price"><span class="price-big" data-price-display>{price_label(p)}</span><span class="price-note">ex VAT</span></p>
         <p class="product-desc">{e(p['description'])}</p>
 
@@ -639,7 +608,6 @@ def build_product(i, p):
         <ul class="assurances" role="list">
           <li>Printed in sturdy carbon / nylon</li>
           <li>Free EU shipping above {euro(SITE['free_shipping_threshold'])}</li>
-          <li>Designed and used on set</li>
         </ul>
       </div>
     </section>
@@ -648,8 +616,7 @@ def build_product(i, p):
   <section class="section details" aria-labelledby="details-title">
     <div class="container details-grid">
       <div>
-        <p class="eyebrow">Details</p>
-        <h2 id="details-title" class="section-title">Why mixers like it.</h2>
+        <h2 id="details-title" class="section-title">Features</h2>
         <ul class="highlights" role="list">{highlights}</ul>
       </div>
       <div>
@@ -662,10 +629,7 @@ def build_product(i, p):
   <section class="section field" aria-labelledby="field-title">
     <div class="container">
       <div class="section-bar">
-        <div>
-          <p class="eyebrow">Photos · {len(pkeys)}</p>
-          <h2 id="field-title" class="section-title">Seen on set.</h2>
-        </div>
+        <h2 id="field-title" class="section-title">Photos <span class="count">{len(pkeys)}</span></h2>
       </div>
       <ul class="shots" role="list">{field}</ul>
     </div>
@@ -674,7 +638,7 @@ def build_product(i, p):
   <section class="section related" aria-labelledby="related-title">
     <div class="container">
       <div class="section-bar">
-        <h2 id="related-title" class="section-title">You may also need.</h2>
+        <h2 id="related-title" class="section-title">Related products</h2>
         <a class="text-link" href="{home_href(root)}#shop">All products</a>
       </div>
       <ul class="cards cards-3" role="list">{rel}</ul>
@@ -706,10 +670,9 @@ def build_404():
     out = out.replace('<meta name="description"', '<meta name="robots" content="noindex">\n<meta name="description"')
     out += '<body class="page-404">\n' + header(root)
     out += """<main id="main" class="notfound container">
-  <p class="eyebrow">Error 404</p>
-  <h1 class="section-title">This page doesn't exist.</h1>
-  <p class="section-lead">It may have moved when the site was renewed. The gear is still here.</p>
-  <a class="btn btn-ink" href="/#shop">Go to the shop <span aria-hidden="true">→</span></a>
+  <h1 class="section-title">Page not found</h1>
+  <p class="section-lead">This page may have moved when the site was renewed.</p>
+  <a class="btn btn-ink" href="/#shop">View the collection</a>
 </main>
 """
     out += footer(root) + "</body>\n</html>\n"

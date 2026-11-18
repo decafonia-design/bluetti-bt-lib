@@ -9,24 +9,48 @@
     "description": "Sturdy carbon/nylon set gear for production sound mixers: mounts, belt clips and storage caddies for Zaxcom, Sennheiser and Wisycom. Designed and used on set."
   },
   "intro": {
-    "eyebrow": "Set gear for production sound",
-    "lead": "I'm a production sound mixer based in Europe. We made these items because we needed them on the set. I use them daily, and so do my colleagues.",
-    "hero_image": "zmtstoragebox/01",
-    "hero_alt": "Eight Zaxcom ZMT transmitters lined up in a black 3D-printed storage box on a warm wooden table, antennas raised.",
-    "hero_product": "zmtstoragebox"
+    "title": "Set gear for production sound",
+    "lead": "Mounts, belt clips and storage for Zaxcom, Sennheiser and Wisycom wireless systems. Printed in carbon / nylon.",
+    "hero_image": "zmt-mount/01",
+    "hero_alt": "A Zaxcom ZMT transmitter with lavalier mic and antenna seated in the black ZMT mount on concrete.",
+    "hero_product": "zmt-mount"
   },
   "facts": [
-    { "title": "Carbon / nylon", "text": "Sturdy, clean prints. No flimsy stuff." },
-    { "title": "Used daily on set", "text": "Designed by a working sound mixer." },
-    { "title": "Free EU shipping", "text": "On orders above €130." },
-    { "title": "Custom builds", "text": "Bay counts and fits for your case." }
+    {
+      "title": "Free EU shipping",
+      "text": "On orders above €130."
+    },
+    {
+      "title": "Custom builds",
+      "text": "Bay counts and fits for your case."
+    }
   ],
-  "systems": ["Zaxcom", "Sennheiser", "Batteries"],
+  "systems": [
+    "Zaxcom",
+    "Sennheiser",
+    "Batteries"
+  ],
   "in_use": [
-    { "image": "zmt-mount/02", "caption": "Plant mic on the beach, rigged with the ZMT mount.", "product": "zmt-mount" },
-    { "image": "batterybeltclip/02", "caption": "Battery belt clip on a period shoot.", "product": "batterybeltclip" },
-    { "image": "zmt-mount/07", "caption": "Car rig: the mount holds the mic by the gear stick.", "product": "zmt-mount" },
-    { "image": "zmtstoragebox/05", "caption": "Custom insert for a sound case.", "product": "zmtstoragebox" }
+    {
+      "image": "zmt-mount/02",
+      "caption": "Plant mic on the beach, rigged with the ZMT mount.",
+      "product": "zmt-mount"
+    },
+    {
+      "image": "batterybeltclip/02",
+      "caption": "Battery belt clip on a period shoot.",
+      "product": "batterybeltclip"
+    },
+    {
+      "image": "zmt-mount/07",
+      "caption": "Car rig: the mount holds the mic by the gear stick.",
+      "product": "zmt-mount"
+    },
+    {
+      "image": "zmtstoragebox/05",
+      "caption": "Custom insert for a sound case.",
+      "product": "zmtstoragebox"
+    }
   ],
   "custom": {
     "title": "Need a different fit?",
@@ -54,13 +78,6 @@
       "a": "Sturdy carbon / nylon. The Euronorm case support for the Sennheiser caddy is made of ABS."
     }
   ],
-  "ordering": {
-    "points": [
-      "Orders via the form or by email",
-      "Prices ex VAT, commercial invoice on request",
-      "Free EU shipping above €130"
-    ]
-  },
   "products": [
     {
       "slug": "zmt-mount",
@@ -82,18 +99,38 @@
         "Great for car mounts"
       ],
       "specs": [
-        ["Fits", "Zaxcom ZMT transmitters"],
-        ["Mounting", "Magnet + 2× 3/8\" thread (back, bottom)"],
-        ["Material", "Carbon / nylon"],
-        ["Versions", "With magnet €65 · Without magnet €55"]
+        [
+          "Fits",
+          "Zaxcom ZMT transmitters"
+        ],
+        [
+          "Mounting",
+          "Magnet + 2× 3/8\" thread (back, bottom)"
+        ],
+        [
+          "Material",
+          "Carbon / nylon"
+        ],
+        [
+          "Versions",
+          "With magnet €65 · Without magnet €55"
+        ]
       ],
       "options": [
         {
           "label": "Version",
           "priced": true,
           "choices": [
-            { "label": "With magnet", "price": 65, "checkout_url": "" },
-            { "label": "Without magnet", "price": 55, "checkout_url": "" }
+            {
+              "label": "With magnet",
+              "price": 65,
+              "checkout_url": ""
+            },
+            {
+              "label": "Without magnet",
+              "price": 55,
+              "checkout_url": ""
+            }
           ]
         }
       ],
@@ -135,22 +172,48 @@
         "Custom holders possible, for example 4× NP-50"
       ],
       "specs": [
-        ["Holds", "2× NP-50 or Wisycom LBP61 + 3 or 4× AA"],
-        ["Clip", "Spring-loaded belt clip"],
-        ["Material", "Carbon / nylon"],
-        ["Custom", "Other battery layouts on request"]
+        [
+          "Holds",
+          "2× NP-50 or Wisycom LBP61 + 3 or 4× AA"
+        ],
+        [
+          "Clip",
+          "Spring-loaded belt clip"
+        ],
+        [
+          "Material",
+          "Carbon / nylon"
+        ],
+        [
+          "Custom",
+          "Other battery layouts on request"
+        ]
       ],
       "note": "Please specify NP-50 or LBP61, and 3 or 4 AA, when you order.",
       "options": [
         {
           "label": "Battery type",
           "priced": false,
-          "choices": [{ "label": "NP-50" }, { "label": "Wisycom LBP61" }]
+          "choices": [
+            {
+              "label": "NP-50"
+            },
+            {
+              "label": "Wisycom LBP61"
+            }
+          ]
         },
         {
           "label": "AA slots",
           "priced": false,
-          "choices": [{ "label": "4× AA" }, { "label": "3× AA" }]
+          "choices": [
+            {
+              "label": "4× AA"
+            },
+            {
+              "label": "3× AA"
+            }
+          ]
         }
       ],
       "checkout_url": "",
@@ -188,16 +251,35 @@
         "Very easy and quick to take out and change batteries"
       ],
       "specs": [
-        ["Fits", "Zaxcom URX 50 / URX 100"],
-        ["Access", "All connectors and buttons"],
-        ["Mounting", "Belt clip"],
-        ["Material", "Carbon / nylon"]
+        [
+          "Fits",
+          "Zaxcom URX 50 / URX 100"
+        ],
+        [
+          "Access",
+          "All connectors and buttons"
+        ],
+        [
+          "Mounting",
+          "Belt clip"
+        ],
+        [
+          "Material",
+          "Carbon / nylon"
+        ]
       ],
       "options": [
         {
           "label": "Receiver",
           "priced": false,
-          "choices": [{ "label": "URX 100" }, { "label": "URX 50" }]
+          "choices": [
+            {
+              "label": "URX 100"
+            },
+            {
+              "label": "URX 50"
+            }
+          ]
         }
       ],
       "checkout_url": "",
@@ -238,10 +320,22 @@
         "Optional radio mic storage box"
       ],
       "specs": [
-        ["Holds", "8× ZMT + spare antennas + 8× NP-50"],
-        ["Sizes", "4, 5, 6, 8 or 10 bays (8 is standard)"],
-        ["Option", "Radio mic storage box"],
-        ["Material", "Carbon / nylon"]
+        [
+          "Holds",
+          "8× ZMT + spare antennas + 8× NP-50"
+        ],
+        [
+          "Sizes",
+          "4, 5, 6, 8 or 10 bays (8 is standard)"
+        ],
+        [
+          "Option",
+          "Radio mic storage box"
+        ],
+        [
+          "Material",
+          "Carbon / nylon"
+        ]
       ],
       "note": "Custom sizes and the radio mic storage box are made on request. Contact me with your setup.",
       "options": [
@@ -249,8 +343,15 @@
           "label": "Size",
           "priced": true,
           "choices": [
-            { "label": "Standard, 8 bays", "price": 75, "checkout_url": "" },
-            { "label": "Custom bay count (quote)", "price": null }
+            {
+              "label": "Standard, 8 bays",
+              "price": 75,
+              "checkout_url": ""
+            },
+            {
+              "label": "Custom bay count (quote)",
+              "price": null
+            }
           ]
         }
       ],
@@ -287,30 +388,70 @@
         "Green and red colour options available"
       ],
       "specs": [
-        ["Models", "Battery holder €40 · 4-bay caddy €35"],
-        ["Batteries", "NP-50 or Wisycom LBP61"],
-        ["Mounting", "ORCA side pouch (4-bay caddy)"],
-        ["Colours", "Black, red, green"],
-        ["Material", "Carbon / nylon"]
+        [
+          "Models",
+          "Battery holder €40 · 4-bay caddy €35"
+        ],
+        [
+          "Batteries",
+          "NP-50 or Wisycom LBP61"
+        ],
+        [
+          "Mounting",
+          "ORCA side pouch (4-bay caddy)"
+        ],
+        [
+          "Colours",
+          "Black, red, green"
+        ],
+        [
+          "Material",
+          "Carbon / nylon"
+        ]
       ],
       "options": [
         {
           "label": "Model",
           "priced": true,
           "choices": [
-            { "label": "Battery holder", "price": 40, "checkout_url": "" },
-            { "label": "4-bay caddy, ORCA mount", "price": 35, "checkout_url": "" }
+            {
+              "label": "Battery holder",
+              "price": 40,
+              "checkout_url": ""
+            },
+            {
+              "label": "4-bay caddy, ORCA mount",
+              "price": 35,
+              "checkout_url": ""
+            }
           ]
         },
         {
           "label": "Battery",
           "priced": false,
-          "choices": [{ "label": "NP-50" }, { "label": "Wisycom LBP61" }]
+          "choices": [
+            {
+              "label": "NP-50"
+            },
+            {
+              "label": "Wisycom LBP61"
+            }
+          ]
         },
         {
           "label": "Colour",
           "priced": false,
-          "choices": [{ "label": "Black" }, { "label": "Red" }, { "label": "Green" }]
+          "choices": [
+            {
+              "label": "Black"
+            },
+            {
+              "label": "Red"
+            },
+            {
+              "label": "Green"
+            }
+          ]
         }
       ],
       "hover": "04",
@@ -348,9 +489,18 @@
         "Comes with the belt clip and the original Sennheiser clip included"
       ],
       "specs": [
-        ["Fits", "Sennheiser G3 / G4 receivers"],
-        ["Included", "Belt clip + original Sennheiser clip"],
-        ["Material", "Carbon / nylon"]
+        [
+          "Fits",
+          "Sennheiser G3 / G4 receivers"
+        ],
+        [
+          "Included",
+          "Belt clip + original Sennheiser clip"
+        ],
+        [
+          "Material",
+          "Carbon / nylon"
+        ]
       ],
       "options": [],
       "checkout_url": "",
@@ -387,10 +537,22 @@
         "Recess for the headphone knob"
       ],
       "specs": [
-        ["Fits", "Sennheiser IEM G3 / G4 Tx / Rx"],
-        ["Sizes", "2, 4, 6, 8, 10 or 12 bays"],
-        ["Case fit", "Custom 8-bay for a standard Euronorm case"],
-        ["Material", "Carbon / nylon, support in ABS"]
+        [
+          "Fits",
+          "Sennheiser IEM G3 / G4 Tx / Rx"
+        ],
+        [
+          "Sizes",
+          "2, 4, 6, 8, 10 or 12 bays"
+        ],
+        [
+          "Case fit",
+          "Custom 8-bay for a standard Euronorm case"
+        ],
+        [
+          "Material",
+          "Carbon / nylon, support in ABS"
+        ]
       ],
       "note": "Prices start at €55 and depend on the number of bays. Contact me with your request.",
       "options": [
@@ -398,8 +560,15 @@
           "label": "Bays",
           "priced": true,
           "choices": [
-            { "label": "Standard caddy", "price": 55, "from": true },
-            { "label": "Custom size / Euronorm fit (quote)", "price": null }
+            {
+              "label": "Standard caddy",
+              "price": 55,
+              "from": true
+            },
+            {
+              "label": "Custom size / Euronorm fit (quote)",
+              "price": null
+            }
           ]
         }
       ],
@@ -439,5 +608,16 @@
       "name": "Joscha Eickel",
       "city": "Berlin"
     }
-  ]
+  ],
+  "about": {
+    "text": "3Deca is run by Jan Deca, a production sound mixer based in Europe. Every product was developed for his own work on set.",
+    "contact": "For questions, custom builds or a commercial invoice, contact info@3deca.com."
+  },
+  "ordering": {
+    "points": [
+      "Orders via the form or by email",
+      "Prices ex VAT, commercial invoice on request",
+      "Free EU shipping above €130"
+    ]
+  }
 }
