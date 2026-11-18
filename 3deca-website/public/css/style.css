@@ -368,6 +368,16 @@ textarea { resize: vertical; min-height: 96px; }
 .shot-btn img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform 0.8s var(--ease); }
 .shot-btn:hover img { transform: scale(1.03); }
 .related { padding-top: 0; }
+.video-section { border-top: 1px solid var(--line); margin-top: clamp(48px, 6vw, 88px); }
+.video-section + .section.field { margin-top: 0; }
+.video { position: relative; aspect-ratio: 16 / 9; background: var(--photo); overflow: hidden; }
+.video iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.video-play { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; background: none; cursor: pointer; }
+.video-play img { width: 100%; height: 100%; object-fit: cover; filter: brightness(0.7); transition: filter 0.3s; }
+.video-play:hover img { filter: brightness(0.85); }
+.play-icon { position: absolute; left: 50%; top: 50%; width: 76px; height: 76px; transform: translate(-50%, -50%); border: 1px solid var(--ink); border-radius: 50%; background: rgba(14, 14, 13, 0.4); }
+.play-icon::after { content: ""; position: absolute; left: 31px; top: 25px; border-style: solid; border-width: 13px 0 13px 21px; border-color: transparent transparent transparent var(--ink); }
+.video-note { margin: 0.7rem 0 0; font-size: 0.85rem; color: var(--ink-2); }
 .section.field { border-top: 1px solid var(--line); margin-top: clamp(48px, 6vw, 88px); }
 
 /* ---------- lightbox ---------- */

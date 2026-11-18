@@ -40,6 +40,21 @@
     });
   }
 
+  /* ---------- video: load YouTube only after the visitor clicks play ---------- */
+  $$("[data-video]").forEach(function (box) {
+    var btn = $("[data-video-play]", box);
+    if (!btn) return;
+    btn.addEventListener("click", function () {
+      var f = document.createElement("iframe");
+      f.src = "https://www.youtube-nocookie.com/embed/" + box.getAttribute("data-video") + "?autoplay=1&rel=0";
+      f.title = box.getAttribute("data-video-title") || "Video";
+      f.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen";
+      f.setAttribute("allowfullscreen", "");
+      box.replaceChild(f, btn);
+      f.focus();
+    });
+  });
+
   /* ---------- shop filters ---------- */
   var chips = $$("[data-filter]");
   var cardList = $("[data-cards]");

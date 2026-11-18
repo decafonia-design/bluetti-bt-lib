@@ -530,6 +530,27 @@ def build_product(i, p):
 
     rel = "".join(product_card(root, q) for q in related(p))
 
+    video_section = ""
+    if p.get("video"):
+        vid = p["video"]["youtube"]
+        poster = f"{slug}/{p['video']['poster']}"
+        video_section = f"""  <section class="section video-section" aria-labelledby="video-title">
+    <div class="container">
+      <div class="section-bar">
+        <h2 id="video-title" class="section-title">Video</h2>
+        <a class="text-link" href="https://www.youtube.com/watch?v={vid}" rel="noopener">Watch on YouTube</a>
+      </div>
+      <div class="video" data-video="{vid}" data-video-title="{e(p['name'])} video">
+        <button type="button" class="video-play" data-video-play aria-label="Play video: {e(p['name'])}">
+          {picture(root, poster, '', '(min-width: 1000px) 80vw, 100vw')}
+          <span class="play-icon" aria-hidden="true"></span>
+        </button>
+      </div>
+      <p class="video-note">The video plays from YouTube.</p>
+    </div>
+  </section>
+"""
+
     gallery_data = {
         "stage": [
             {
@@ -610,6 +631,7 @@ def build_product(i, p):
     </section>
   </div>
 
+{video_section}
   <section class="section field" aria-labelledby="field-title">
     <div class="container">
       <div class="section-bar">

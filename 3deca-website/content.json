@@ -135,7 +135,11 @@
         "The ZMT mount with transmitter and mic on a gooseneck, held by a spring clamp.",
         "The mount used as a car rig: a mic positioned next to the gear stick inside a car.",
         "Close-up of the transmitter in its mount with the lav mic and antenna, against a white background."
-      ]
+      ],
+      "video": {
+        "youtube": "IhyS6ELePoU",
+        "poster": "06"
+      }
     },
     {
       "slug": "batterybeltclip",
