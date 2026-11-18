@@ -4,9 +4,9 @@
 Reads content.json and writes the HTML pages into public/.
 Everything in public/ is the finished website: upload that folder as-is.
 
-    python3 build.py            # normal build: pretty URLs (/zmt-mount/)
-    python3 build.py --preview  # links point at index.html files, for
-                                # opening the site straight from disk
+    python3 build.py                     # normal build: pretty URLs (/zmt-mount/)
+    python3 build.py --preview           # links point at index.html files
+    python3 build.py --preview --out DIR # write the HTML somewhere else
 
 Needs Python 3.8+ and Pillow (only to read image sizes).
 """
@@ -22,17 +22,21 @@ from PIL import Image
 HERE = Path(__file__).resolve().parent
 PUBLIC = HERE / "public"
 PREVIEW = "--preview" in sys.argv
-# --out DIR writes the HTML somewhere else (used for previews); assets stay in public/.
 OUT = Path(sys.argv[sys.argv.index("--out") + 1]).resolve() if "--out" in sys.argv else PUBLIC
 
 C = json.loads((HERE / "content.json").read_text(encoding="utf-8"))
 SITE = C["site"]
 PRODUCTS = C["products"]
+BY_SLUG = {p["slug"]: p for p in PRODUCTS}
 YEAR = datetime.date.today().year
 
 
+# --------------------------------------------------------------------------
+# helpers
+# --------------------------------------------------------------------------
+
+
 def e(text):
-    """Escape text for HTML."""
     return html.escape(str(text), quote=True)
 
 
@@ -51,7 +55,9 @@ def price_label(p):
 
 
 def home_href(root):
-    return root + ("index.html" if PREVIEW else "") if root else ("index.html" if PREVIEW else "./")
+    if root == "/":
+        return "/"
+    return root + "index.html" if PREVIEW else (root or "./")
 
 
 def product_href(root, slug):
@@ -68,27 +74,49 @@ def img_size(rel):
     return _size_cache[rel]
 
 
-def picture(root, key, alt, sizes, cls="", eager=False):
-    """Responsive <img> for an image key like 'zmt-mount/03'."""
+def srcset(root, key):
     small, large = f"{key}-720.webp", f"{key}-1600.webp"
-    sw, _ = img_size(small)
-    lw, lh = img_size(large)
+    return f"{root}img/{small} {img_size(small)[0]}w, {root}img/{large} {img_size(large)[0]}w"
+
+
+def picture(root, key, alt, sizes, cls="", eager=False):
+    """Responsive <img> for an image key like 'zmt-mount/03' or 'zmt-mount/s1'."""
+    lw, lh = img_size(f"{key}-1600.webp")
     load = 'fetchpriority="high"' if eager else 'loading="lazy"'
     cls_attr = f' class="{cls}"' if cls else ""
     return (
-        f'<img{cls_attr} src="{root}img/{large}" '
-        f'srcset="{root}img/{small} {sw}w, {root}img/{large} {lw}w" '
-        f'sizes="{sizes}" width="{lw}" height="{lh}" alt="{e(alt)}" '
-        f'{load} decoding="async">'
+        f'<img{cls_attr} src="{root}img/{key}-1600.webp" srcset="{srcset(root, key)}" '
+        f'sizes="{sizes}" width="{lw}" height="{lh}" alt="{e(alt)}" {load} decoding="async">'
     )
 
 
+def studio_keys(p):
+    return [f"{p['slug']}/s{k + 1}" for k in range(len(p["studio"]))]
+
+
+def photo_keys(p):
+    return [f"{p['slug']}/{k + 1:02d}" for k in range(len(p["images"]))]
+
+
+def checkout_links(p):
+    """Payment links per priced choice (webshop mode). Empty when none are set."""
+    links = {}
+    for gi, g in enumerate(p["options"]):
+        if g["priced"]:
+            for ci, c in enumerate(g["choices"]):
+                if c.get("checkout_url"):
+                    links[f"{gi}:{ci}"] = c["checkout_url"]
+    if p.get("checkout_url"):
+        links["*"] = p["checkout_url"]
+    return links
+
+
 # --------------------------------------------------------------------------
-# Shared page chrome
+# page chrome
 # --------------------------------------------------------------------------
 
 WORDMARK = (
-    '<span class="wm" aria-hidden="true"><span class="wm-dot"></span>'
+    '<span class="wm" aria-hidden="true"><span class="wm-mark"></span>'
     '<span class="wm-3d">3D</span><span class="wm-eca">eca</span></span>'
 )
 
@@ -102,8 +130,8 @@ def head(root, title, description, canonical, extra=""):
 <title>{e(title)}</title>
 <meta name="description" content="{e(description)}">
 <link rel="canonical" href="{e(canonical)}">
-<meta name="theme-color" content="#0a0a0b">
-<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#ffffff">
+<meta name="color-scheme" content="light">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="3Deca">
 <meta property="og:title" content="{e(title)}">
@@ -121,13 +149,10 @@ def head(root, title, description, canonical, extra=""):
 """
 
 
-def header(root, current=""):
+def header(root):
     home = home_href(root)
-    links = [("gear", "Gear"), ("about", "About"), ("reviews", "Reviews"), ("ordering", "Ordering")]
-    items = "".join(
-        f'<li><a href="{home}#{a}"{" aria-current=\"page\"" if current == a else ""}>{t}</a></li>'
-        for a, t in links
-    )
+    links = [("shop", "Shop"), ("in-use", "In use"), ("about", "About"), ("faq", "FAQ")]
+    items = "".join(f'<li><a href="{home}#{a}">{t}</a></li>' for a, t in links)
     return f"""<a class="skip-link" href="#main">Skip to content</a>
 <header class="site-header" data-header>
   <div class="header-inner">
@@ -135,7 +160,7 @@ def header(root, current=""):
     <nav class="site-nav" id="site-nav" aria-label="Main">
       <ul>{items}</ul>
     </nav>
-    <a class="btn btn-accent btn-sm header-cta" href="{home}#order">
+    <a class="btn btn-ink btn-sm header-cta" href="{home}#order">
       Order<span class="order-count" data-order-count hidden></span>
     </a>
     <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" data-nav-toggle>
@@ -149,37 +174,40 @@ def header(root, current=""):
 def footer(root):
     home = home_href(root)
     gear = "".join(
-        f'<li><a href="{product_href(root, p["slug"])}">{e(p["name"])}</a></li>' for p in PRODUCTS
+        f'<li><a href="{product_href(root, p["slug"])}"><span class="f-code">{p["code"]}</span>{e(p["name"])}</a></li>'
+        for p in PRODUCTS
     )
     return f"""<footer class="site-footer">
   <div class="container">
-    <div class="footer-top">
-      <a class="footer-mark" href="{home}" aria-label="3Deca, home">{WORDMARK}</a>
-      <p class="footer-claim">Set gear by a sound mixer, for sound mixers.</p>
-    </div>
     <div class="footer-grid">
-      <div>
-        <h2 class="footer-h">Contact</h2>
-        <p><a class="footer-mail" href="mailto:{SITE['email']}">{SITE['email']}</a></p>
-        <p>Questions, suggestions or a custom build? Mail me.</p>
+      <div class="footer-brand">
+        <a class="footer-mark" href="{home}" aria-label="3Deca, home">{WORDMARK}</a>
+        <p>Set gear by a sound mixer, for sound mixers. Designed and used on set.</p>
       </div>
       <div>
-        <h2 class="footer-h">Gear</h2>
+        <h2 class="footer-h">Products</h2>
         <ul class="footer-list">{gear}</ul>
       </div>
       <div>
-        <h2 class="footer-h">Good to know</h2>
+        <h2 class="footer-h">Ordering</h2>
         <ul class="footer-list">
           <li>Prices ex VAT</li>
           <li>Free EU shipping above {euro(SITE['free_shipping_threshold'])}</li>
           <li>Commercial invoice on request</li>
+          <li><a href="{home}#order">Order form</a></li>
+        </ul>
+      </div>
+      <div>
+        <h2 class="footer-h">Contact</h2>
+        <ul class="footer-list">
+          <li><a href="mailto:{SITE['email']}">{SITE['email']}</a></li>
           <li><a href="{SITE['imdb']}" rel="noopener">{SITE['owner']} on IMDb</a></li>
         </ul>
       </div>
     </div>
     <div class="footer-bottom">
       <p>© 2023–{YEAR} {SITE['owner']} · 3Deca</p>
-      <p>No cookies. No trackers. Just gear.</p>
+      <p>No cookies. No trackers.</p>
     </div>
   </div>
 </footer>
@@ -190,47 +218,35 @@ def json_ld(data):
     return f'<script type="application/ld+json">{json.dumps(data, ensure_ascii=False)}</script>\n'
 
 
-def hud(label_left="SC 3D · TK 01"):
-    """The camera-monitor overlay (decorative)."""
-    meter = '<span class="meter" data-meter><span class="meter-fill"></span></span>'
-    return f"""<div class="hud" aria-hidden="true">
-      <span class="hud-corner tl"></span><span class="hud-corner tr"></span>
-      <span class="hud-corner bl"></span><span class="hud-corner br"></span>
-      <span class="hud-tl"><span class="rec-dot"></span>REC</span>
-      <span class="hud-tr">TC <span data-timecode>00:00:00:00</span> · 25P</span>
-      <span class="hud-bl">{label_left}</span>
-      <span class="hud-br"><span class="meters"><span class="meter-label">L</span>{meter}<span class="meter-label">R</span>{meter}</span></span>
-      <span class="hud-cross"></span>
-    </div>"""
-
-
-# --------------------------------------------------------------------------
-# Home page
-# --------------------------------------------------------------------------
-
-
-def product_card(root, p, i, large=False):
-    key = f'{p["slug"]}/01'
-    sizes = "(min-width: 1000px) 50vw, 100vw" if large else "(min-width: 1000px) 25vw, (min-width: 640px) 50vw, 100vw"
-    return f"""<li class="card{' card-lg' if large else ''}" data-reveal>
+def product_card(root, p):
+    s1 = studio_keys(p)[0]
+    hover = f"{p['slug']}/{p['hover']}"
+    sizes = "(min-width: 1100px) 25vw, (min-width: 560px) 50vw, 100vw"
+    return f"""<li class="card" data-system="{e(p['system'])}">
         <a class="card-link" href="{product_href(root, p['slug'])}">
-          <span class="card-media">{picture(root, key, p['images'][0], sizes)}</span>
-          <span class="card-body">
-            <span class="card-meta"><span class="card-idx">{i:02d}</span><span class="card-brand">{e(p['brand'])}</span></span>
-            <span class="card-title">{e(p['name'])}</span>
-            <span class="card-tagline">{e(p['tagline'])}</span>
-            <span class="card-foot"><span class="price">{price_label(p)}</span><span class="card-arrow" aria-hidden="true">→</span></span>
+          <span class="card-media">
+            {picture(root, s1, p['studio'][0], sizes, 'card-img')}
+            {picture(root, hover, '', sizes, 'card-img card-img-alt')}
           </span>
+          <span class="card-meta"><span class="code">{p['code']}</span><span>{e(p['brand'])}</span></span>
+          <span class="card-title">{e(p['name'])}</span>
+          <span class="card-tagline">{e(p['tagline'])}</span>
+          <span class="card-price">{price_label(p)}</span>
         </a>
       </li>"""
 
 
-def order_row(p, i):
+# --------------------------------------------------------------------------
+# home
+# --------------------------------------------------------------------------
+
+
+def order_row(p):
     opts = ""
     for gi, g in enumerate(p["options"]):
         choices = "".join(
             f'<option value="{ci}">{e(c["label"])}'
-            + (f' · {choice_price(c)}' if g["priced"] and c.get("price") is not None else "")
+            + (f" · {choice_price(c)}" if g["priced"] and c.get("price") is not None else "")
             + "</option>"
             for ci, c in enumerate(g["choices"])
         )
@@ -240,10 +256,10 @@ def order_row(p, i):
             </label>"""
     return f"""<li class="order-row" data-product="{p['slug']}">
           <div class="order-row-main">
-            <span class="order-idx" aria-hidden="true">{i:02d}</span>
+            <span class="order-thumb" aria-hidden="true"><img src="img/{studio_keys(p)[0]}-720.webp" alt="" width="72" height="54" loading="lazy"></span>
             <div class="order-row-text">
               <span class="order-name" id="on-{p['slug']}">{e(p['name'])}</span>
-              <span class="order-fits">{e(p['fits'])}</span>
+              <span class="order-fits"><span class="code">{p['code']}</span> {e(p['fits'])}</span>
             </div>
             <div class="stepper" role="group" aria-labelledby="on-{p['slug']}">
               <button type="button" class="step" data-step="-1" aria-label="One less {e(p['name'])}">−</button>
@@ -259,45 +275,61 @@ def order_row(p, i):
 def build_home():
     root = ""
     intro = C["intro"]
-    hero_key = intro["hero_image"]
-    facts = "".join(f"<li>{e(f)}</li>" for f in C["facts"])
-    facts_track = "".join(f'<span class="marquee-item">{e(f)}</span>' for f in C["facts"])
-    cards = "".join(product_card(root, p, i + 1, large=(i in (0, 3))) for i, p in enumerate(PRODUCTS))
-    values = "".join(
-        f"""<li class="value" data-reveal>
-          <span class="value-num" aria-hidden="true">{i + 1:02d}</span>
-          <h3 class="value-title">{e(v['title'])}</h3>
-          <p>{e(v['text'])}</p>
-        </li>"""
-        for i, v in enumerate(C["values"])
+    hero_p = BY_SLUG[intro["hero_product"]]
+    threshold = SITE["free_shipping_threshold"]
+
+    facts = "".join(
+        f'<li class="fact"><span class="fact-title">{e(f["title"])}</span><span class="fact-text">{e(f["text"])}</span></li>'
+        for f in C["facts"]
     )
-    reviews = "".join(
-        f"""<li class="review{' review-featured' if r.get('featured') else ''}" data-reveal>
+    filters = '<button type="button" class="chip" aria-pressed="true" data-filter="all">All</button>' + "".join(
+        f'<button type="button" class="chip" aria-pressed="false" data-filter="{e(s)}">{e(s)}</button>'
+        for s in C["systems"]
+    )
+    cards = "".join(product_card(root, p) for p in PRODUCTS)
+    cards += f"""<li class="card card-custom" data-system="all">
+        <a class="card-link" href="mailto:{SITE['email']}?subject=Custom%20build%20request">
+          <span class="custom-title">{e(C['custom']['title'])}</span>
+          <span class="custom-text">{e(C['custom']['text'])}</span>
+          <span class="custom-cta">Ask for a custom build <span aria-hidden="true">→</span></span>
+        </a>
+      </li>"""
+
+    in_use = "".join(
+        f"""<li class="use">
           <figure>
-            <blockquote><p>{e(r['quote'])}</p></blockquote>
-            <figcaption><span class="review-name">{e(r['name'])}</span><span class="review-city">{e(r['city'])}</span></figcaption>
+            <div class="use-media">{picture(root, u['image'], BY_SLUG[u['product']]['images'][int(u['image'].split('/')[1]) - 1], '(min-width: 900px) 25vw, 50vw')}</div>
+            <figcaption><span class="code">{BY_SLUG[u['product']]['code']}</span> {e(u['caption'])}
+              <a href="{product_href(root, u['product'])}">{e(BY_SLUG[u['product']]['name'])}<span class="sr-only"> product page</span> →</a></figcaption>
           </figure>
         </li>"""
-        for r in C["reviews"]
+        for u in C["in_use"]
     )
-    ordering = "".join(f"<li>{e(t)}</li>" for t in C["ordering"]["points"])
-    rows = "".join(order_row(p, i + 1) for i, p in enumerate(PRODUCTS))
-    threshold = SITE["free_shipping_threshold"]
+
+    featured = next(r for r in C["reviews"] if r.get("featured"))
+    others = "".join(
+        f"""<li><figure class="review">
+            <blockquote><p>{e(r['quote'])}</p></blockquote>
+            <figcaption>{e(r['name'])}<span>{e(r['city'])}</span></figcaption>
+          </figure></li>"""
+        for r in C["reviews"]
+        if not r.get("featured")
+    )
+    faq = "".join(
+        f"""<details class="faq-item"><summary>{e(f['q'])}</summary><p>{e(f['a'])}</p></details>"""
+        for f in C["faq"]
+    )
+    points = "".join(f"<li>{e(t)}</li>" for t in C["ordering"]["points"])
+    rows = "".join(order_row(p) for p in PRODUCTS)
 
     order_data = {
         "email": SITE["email"],
         "threshold": threshold,
         "products": {
-            p["slug"]: {
-                "name": p["name"],
-                "price": p["price"],
-                "from": p.get("price_from", False),
-                "options": p["options"],
-            }
+            p["slug"]: {"name": p["name"], "code": p["code"], "price": p["price"], "from": p.get("price_from", False), "options": p["options"]}
             for p in PRODUCTS
         },
     }
-
     ld = {
         "@context": "https://schema.org",
         "@type": "Organization",
@@ -308,131 +340,145 @@ def build_home():
         "description": SITE["description"],
     }
 
-    title = "3Deca · Set gear for production sound mixers"
-    out = head(root, title, SITE["description"], SITE["url"] + "/", json_ld(ld))
-    out += '<body class="page-home">\n'
-    out += header(root)
+    out = head(root, "3Deca · Set gear for production sound mixers", SITE["description"], SITE["url"] + "/", json_ld(ld))
+    out += '<body class="page-home">\n' + header(root)
     out += f"""<main id="main">
   <section class="hero" aria-labelledby="hero-title">
-    <div class="hero-frame">
-      {picture(root, hero_key, intro['hero_alt'], '100vw', 'hero-img', eager=True)}
-      <div class="hero-scrim" aria-hidden="true"></div>
-      {hud()}
-    </div>
-    <div class="hero-copy container">
-      <p class="eyebrow"><span class="eyebrow-line" aria-hidden="true"></span>{e(intro['eyebrow'])}</p>
-      <h1 id="hero-title" class="hero-title">
-        <span class="hero-line"><span>Built on set.</span></span>
-        <span class="hero-line hero-line-accent"><span>For the set.</span></span>
-      </h1>
-      <p class="hero-lead">{e(intro['lead'])}</p>
-      <div class="hero-actions">
-        <a class="btn btn-accent" href="#gear">See the gear <span aria-hidden="true">↓</span></a>
-        <a class="btn btn-ghost" href="#order">Build an order</a>
+    <div class="container hero-grid">
+      <div class="hero-text">
+        <p class="eyebrow">{e(intro['eyebrow'])}</p>
+        <h1 id="hero-title" class="hero-title">Built on set.<br><span class="hero-accent">For the set.</span></h1>
+        <p class="hero-lead">{e(intro['lead'])}</p>
+        <div class="hero-actions">
+          <a class="btn btn-ink" href="#shop">Shop the gear <span aria-hidden="true">→</span></a>
+          <a class="btn btn-line" href="#order">Order form</a>
+        </div>
       </div>
+      <figure class="hero-media">
+        <a class="hero-shot" href="{product_href(root, hero_p['slug'])}">
+          {picture(root, intro['hero_image'], intro['hero_alt'], '(min-width: 1000px) 50vw, 100vw', 'hero-img', eager=True)}
+          <span class="tc-chip" aria-hidden="true"><span class="rec-dot"></span>TC <span data-timecode>00:00:00:00</span></span>
+        </a>
+        <figcaption class="hero-caption">
+          <span><span class="code">{hero_p['code']}</span> {e(hero_p['name'])}</span>
+          <a href="{product_href(root, hero_p['slug'])}">{price_label(hero_p)} <span aria-hidden="true">→</span><span class="sr-only"> view {e(hero_p['name'])}</span></a>
+        </figcaption>
+      </figure>
     </div>
-  </section>
-
-  <section class="facts" aria-label="Key facts">
-    <ul class="sr-only">{facts}</ul>
-    <div class="marquee" aria-hidden="true">
-      <div class="marquee-track">{facts_track}{facts_track}</div>
-      <div class="marquee-track">{facts_track}{facts_track}</div>
-    </div>
-  </section>
-
-  <section class="section gear" id="gear" aria-labelledby="gear-title">
     <div class="container">
-      <div class="section-head" data-reveal>
-        <p class="kicker">The kit · {len(PRODUCTS):02d} items</p>
-        <h2 id="gear-title" class="section-title">Gear that earns its place on your belt.</h2>
-        <p class="section-lead">Mounts, belt clips and storage for Zaxcom, Sennheiser and Wisycom. Printed in sturdy carbon/nylon and tested every shooting day.</p>
+      <ul class="facts" role="list">{facts}</ul>
+    </div>
+  </section>
+
+  <section class="section shop" id="shop" aria-labelledby="shop-title">
+    <div class="container">
+      <div class="section-bar">
+        <div>
+          <p class="eyebrow">The collection · {len(PRODUCTS)} products</p>
+          <h2 id="shop-title" class="section-title">Gear that earns its place<br>on your belt.</h2>
+        </div>
+        <div class="filters" role="group" aria-label="Filter by system">{filters}</div>
       </div>
-      <ul class="cards" role="list">
+      <p class="sr-only" aria-live="polite" data-filter-status></p>
+      <ul class="cards" role="list" data-cards>
         {cards}
       </ul>
     </div>
   </section>
 
-  <section class="section values" aria-labelledby="values-title">
+  <section class="section in-use" id="in-use" aria-labelledby="use-title">
     <div class="container">
-      <h2 id="values-title" class="sr-only">Why 3Deca</h2>
-      <ul class="values-grid" role="list">{values}</ul>
+      <div class="section-bar">
+        <div>
+          <p class="eyebrow">In use</p>
+          <h2 id="use-title" class="section-title">Tested every shooting day.</h2>
+        </div>
+        <p class="section-lead">Beaches, car rigs, period drama. Every piece started as a fix for a real problem on set.</p>
+      </div>
+      <ul class="uses" role="list">{in_use}</ul>
     </div>
   </section>
 
   <section class="section about" id="about" aria-labelledby="about-title">
     <div class="container about-grid">
-      <div class="about-media" data-reveal>
-        <div class="about-frame">
-          {picture(root, 'zmt-mount/02', PRODUCTS[0]['images'][1], '(min-width: 900px) 45vw, 100vw')}
-          {hud('EXT. BEACH · DAY')}
-        </div>
-      </div>
-      <div class="about-copy" data-reveal>
-        <p class="kicker">From the sound cart</p>
+      <div class="about-copy">
+        <p class="eyebrow">About</p>
         <h2 id="about-title" class="section-title">Made by someone who needed it.</h2>
         <p class="about-lead">I'm a production sound mixer based in Europe. Every product here started on set, as a fix for something that slowed us down. I use them daily, and so do my colleagues.</p>
-        <p>Got a piece of kit that needs a better home? Contact me with any questions or suggestions you might have. Custom bay counts and fits for your case are part of the job.</p>
+        <p>Questions or suggestions? Contact me any time. Custom bay counts and fits for your case are part of the job.</p>
         <div class="about-actions">
-          <a class="btn btn-ghost" href="{SITE['imdb']}" rel="noopener">My credits on IMDb <span aria-hidden="true">↗</span></a>
+          <a class="btn btn-line" href="{SITE['imdb']}" rel="noopener">My credits on IMDb <span aria-hidden="true">↗</span></a>
           <a class="text-link" href="mailto:{SITE['email']}">{SITE['email']}</a>
         </div>
+      </div>
+      <div class="about-media">
+        {picture(root, 'urxbeltclip/02', BY_SLUG['urxbeltclip']['images'][1], '(min-width: 900px) 40vw, 100vw')}
       </div>
     </div>
   </section>
 
   <section class="section reviews" id="reviews" aria-labelledby="reviews-title">
     <div class="container">
-      <div class="section-head" data-reveal>
-        <p class="kicker">Heard on set</p>
-        <h2 id="reviews-title" class="section-title">“No flimsy stuff.”</h2>
+      <p class="eyebrow" id="reviews-title">What mixers say</p>
+      <figure class="review-featured">
+        <blockquote><p>{e(featured['quote'])}</p></blockquote>
+        <figcaption>{e(featured['name'])}<span>{e(featured['city'])}</span></figcaption>
+      </figure>
+      <ul class="reviews-grid" role="list">{others}</ul>
+    </div>
+  </section>
+
+  <section class="section faq" id="faq" aria-labelledby="faq-title">
+    <div class="container faq-grid">
+      <div>
+        <p class="eyebrow">FAQ</p>
+        <h2 id="faq-title" class="section-title">Good to know.</h2>
       </div>
-      <ul class="reviews-grid" role="list">{reviews}</ul>
+      <div class="faq-list">{faq}</div>
     </div>
   </section>
 
   <section class="section order" id="order" aria-labelledby="order-title">
     <div class="container">
-      <div class="section-head" id="ordering" data-reveal>
-        <p class="kicker">Order</p>
-        <h2 id="order-title" class="section-title">Build your order.</h2>
-        <p class="section-lead">Pick your gear, and I'll get back to you with a confirmation and payment details.</p>
-        <ul class="ordering-points" role="list">{ordering}</ul>
+      <div class="section-bar">
+        <div>
+          <p class="eyebrow">Order</p>
+          <h2 id="order-title" class="section-title">Build your order.</h2>
+        </div>
+        <ul class="order-points" role="list">{points}</ul>
       </div>
 
       <form class="order-form" id="order-form" action="mailto:{SITE['email']}" method="post" enctype="text/plain" data-order-form>
         <fieldset class="order-items">
-          <legend class="order-legend">1 · Gear</legend>
+          <legend class="order-legend">1 · Choose your gear</legend>
           <ul class="order-list" role="list">{rows}</ul>
         </fieldset>
 
         <div class="order-side">
           <fieldset class="order-you">
-            <legend class="order-legend">2 · You</legend>
-            <label class="field"><span class="field-label">Your name</span><input name="name" autocomplete="name" required></label>
-            <label class="field"><span class="field-label">Your email</span><input name="email" type="email" autocomplete="email" required></label>
-            <label class="field"><span class="field-label">Shipping country</span><input name="country" autocomplete="country-name"></label>
-            <label class="field"><span class="field-label">Your message <span class="optional">(custom requests, invoice details)</span></span><textarea name="message" rows="4"></textarea></label>
+            <legend class="order-legend">2 · Your details</legend>
+            <label class="field"><span class="field-label">Name</span><input id="f-name" name="name" autocomplete="name" required></label>
+            <label class="field"><span class="field-label">Email</span><input id="f-email" name="email" type="email" autocomplete="email" required></label>
+            <label class="field"><span class="field-label">Shipping country</span><input id="f-country" name="country" autocomplete="country-name"></label>
+            <label class="field"><span class="field-label">Message <span class="optional">(custom requests, invoice details)</span></span><textarea id="f-message" name="message" rows="3"></textarea></label>
           </fieldset>
 
-          <div class="order-summary" aria-labelledby="summary-title">
-            <h3 id="summary-title" class="order-legend">3 · Summary</h3>
+          <div class="order-summary">
+            <h3 class="order-legend">3 · Summary</h3>
             <ul class="summary-lines" data-summary role="list"><li class="summary-empty">No gear selected yet.</li></ul>
             <div class="summary-total"><span>Subtotal ex VAT</span><output data-total aria-live="polite">€0</output></div>
             <div class="ship" data-ship>
               <div class="ship-meter" role="meter" aria-valuemin="0" aria-valuemax="{threshold}" aria-valuenow="0" aria-label="Progress to free EU shipping" data-ship-meter>
                 <span class="ship-fill" data-ship-fill></span>
-                <span class="ship-mark" aria-hidden="true">0 dB</span>
               </div>
               <p class="ship-text" data-ship-text aria-live="polite">Free EU shipping above {euro(threshold)}.</p>
             </div>
-            <button class="btn btn-accent btn-block" type="submit">Send order request <span aria-hidden="true">→</span></button>
-            <p class="order-fine">This opens your email app with the order filled in. Nothing is charged until we've confirmed it together.</p>
+            <button class="btn btn-ink btn-block" type="submit">Send order request <span aria-hidden="true">→</span></button>
+            <p class="order-fine">This opens your email app with the order filled in. Nothing is charged until I've confirmed it.</p>
             <div class="order-fallback" data-order-fallback hidden>
               <p>Email app didn't open? Copy your order and send it to <a href="mailto:{SITE['email']}">{SITE['email']}</a>.</p>
               <textarea readonly rows="8" data-order-text aria-label="Your order as text"></textarea>
-              <button class="btn btn-ghost btn-sm" type="button" data-copy-order>Copy order</button>
+              <button class="btn btn-line btn-sm" type="button" data-copy-order>Copy order</button>
             </div>
           </div>
         </div>
@@ -442,191 +488,198 @@ def build_home():
 </main>
 <script type="application/json" id="order-data">{json.dumps(order_data, ensure_ascii=False)}</script>
 """
-    out += footer(root)
-    out += "</body>\n</html>\n"
+    out += footer(root) + "</body>\n</html>\n"
     (OUT / "index.html").write_text(out, encoding="utf-8")
 
 
 # --------------------------------------------------------------------------
-# Product pages
+# product pages
 # --------------------------------------------------------------------------
+
+
+def related(p, n=3):
+    same = [q for q in PRODUCTS if q["system"] == p["system"] and q is not p]
+    rest = [q for q in PRODUCTS if q["system"] != p["system"]]
+    return (same + rest)[:n]
 
 
 def build_product(i, p):
     root = "../"
     slug = p["slug"]
-    n = len(p["images"])
-    keys = [f"{slug}/{k + 1:02d}" for k in range(n)]
+    skeys, pkeys = studio_keys(p), photo_keys(p)
+    keys = skeys + pkeys
+    alts = p["studio"] + p["images"]
+    n = len(keys)
     url = f"{SITE['url']}/{slug}/"
 
     thumbs = "".join(
         f"""<li><button type="button" class="thumb" data-thumb="{k}" aria-label="Show photo {k + 1} of {n}"{' aria-current="true"' if k == 0 else ''}>
-            {picture(root, keys[k], '', '96px')}
+            <img src="{root}img/{keys[k]}-720.webp" alt="" width="96" height="72" loading="lazy" decoding="async">
           </button></li>"""
         for k in range(n)
     )
-    features = "".join(f"<li>{e(f)}</li>" for f in p["features"])
+    highlights = "".join(f"<li>{e(h)}</li>" for h in p["highlights"])
+    specs = f'<tr><th scope="row">Product code</th><td>{p["code"]}</td></tr>' + "".join(
+        f'<tr><th scope="row">{e(a)}</th><td>{e(b)}</td></tr>' for a, b in p["specs"]
+    )
 
-    option_rows = ""
-    for g in p["options"]:
-        if g["priced"]:
-            for c in g["choices"]:
-                price = choice_price(c).capitalize() if c.get("price") is None else choice_price(c)
-                option_rows += f"<tr><th scope=\"row\">{e(c['label'])}</th><td>{price}</td></tr>"
-    if not option_rows:
-        option_rows = f"<tr><th scope=\"row\">{e(p['name'])}</th><td>{euro(p['price'])}</td></tr>"
-
-    selects = ""
+    option_groups = ""
     for gi, g in enumerate(p["options"]):
-        choices = "".join(
-            f'<option value="{ci}">{e(c["label"])}'
-            + (f' · {choice_price(c)}' if g["priced"] and c.get("price") is not None else "")
-            + "</option>"
+        radios = "".join(
+            f"""<label class="seg"><input type="radio" name="o{gi}" value="{ci}"{' checked' if ci == 0 else ''} data-priced="{1 if g['priced'] else 0}" data-price="{'' if c.get('price') is None else c['price']}" data-from="{1 if c.get('from') else 0}">
+              <span>{e(c['label'])}{f'<small>{choice_price(c)}</small>' if g['priced'] else ''}</span></label>"""
             for ci, c in enumerate(g["choices"])
         )
-        selects += f'<label class="field"><span class="field-label">{e(g["label"])}</span><select name="o{gi}">{choices}</select></label>'
+        option_groups += f'<fieldset class="opt-group"><legend class="field-label">{e(g["label"])}</legend><div class="segs">{radios}</div></fieldset>'
 
-    # Lay photos out on a 3-column grid; a photo left alone on the last row spans it.
+    links = checkout_links(p)
+    buy = (
+        f'<a class="btn btn-accent" href="#" data-buy hidden>Buy now <span aria-hidden="true">→</span></a>'
+        f'<script type="application/json" id="checkout-data">{json.dumps(links)}</script>'
+        if links
+        else ""
+    )
+
+    # Photos from the field, laid out on a 3-column grid without gaps
     spans, col = [], 0
-    for k in range(n):
+    for k in range(len(pkeys)):
         w = 2 if k % 5 == 0 else 1
         if col + w > 3:
             col = 0
         spans.append(w)
         col = (col + w) % 3
-    if col:  # stretch the last photo so the final row has no gap
+    if col and spans:
         spans[-1] += 3 - col
     shot_cls = [{1: "", 2: " shot-wide", 3: " shot-full"}[w] for w in spans]
-    gallery = "".join(
-        f"""<li class="shot{shot_cls[k]}" data-reveal>
-          <button type="button" class="shot-btn" data-open="{k}">
-            {picture(root, keys[k], p['images'][k], '(min-width: 900px) 33vw, 100vw')}
-            <span class="shot-idx" aria-hidden="true">{k + 1:02d}/{n:02d}</span>
+    field = "".join(
+        f"""<li class="shot{shot_cls[k]}">
+          <button type="button" class="shot-btn" data-open="{len(skeys) + k}" aria-label="Enlarge: {e(p['images'][k])}">
+            {picture(root, pkeys[k], p['images'][k], '(min-width: 900px) 33vw, 100vw')}
           </button>
         </li>"""
-        for k in range(n)
+        for k in range(len(pkeys))
     )
 
-    prev_p = PRODUCTS[(i - 1) % len(PRODUCTS)]
-    next_p = PRODUCTS[(i + 1) % len(PRODUCTS)]
+    rel = "".join(product_card(root, q) for q in related(p))
 
-    lightbox_data = [
-        {
-            "src": f"{root}img/{k}-1600.webp",
-            "alt": p["images"][j],
-        }
-        for j, k in enumerate(keys)
-    ]
-    main_srcs = [
-        {
-            "src": f"{root}img/{k}-1600.webp",
-            "srcset": f"{root}img/{k}-720.webp {img_size(k + '-720.webp')[0]}w, {root}img/{k}-1600.webp {img_size(k + '-1600.webp')[0]}w",
-            "w": img_size(k + "-1600.webp")[0],
-            "h": img_size(k + "-1600.webp")[1],
-            "alt": p["images"][j],
-        }
-        for j, k in enumerate(keys)
-    ]
+    gallery_data = {
+        "stage": [
+            {
+                "src": f"{root}img/{k}-1600.webp",
+                "srcset": srcset(root, k),
+                "w": img_size(k + "-1600.webp")[0],
+                "h": img_size(k + "-1600.webp")[1],
+                "alt": alts[j],
+            }
+            for j, k in enumerate(keys)
+        ]
+    }
 
-    offers = []
-    for g in p["options"]:
-        if g["priced"]:
-            for c in g["choices"]:
-                if c.get("price") is not None:
-                    offers.append(c["price"])
-    if not offers:
-        offers = [p["price"]]
+    offers = [c["price"] for g in p["options"] if g["priced"] for c in g["choices"] if c.get("price") is not None] or [p["price"]]
     ld = {
         "@context": "https://schema.org",
         "@type": "Product",
         "name": p["card_name"],
-        "description": p["summary"],
+        "sku": p["code"],
+        "description": p["description"],
         "image": [f"{SITE['url']}/img/{k}-1600.webp" for k in keys[:3]],
         "brand": {"@type": "Brand", "name": "3Deca"},
         "url": url,
-        "offers": {
-            "@type": "AggregateOffer",
-            "priceCurrency": "EUR",
-            "lowPrice": min(offers),
-            "highPrice": max(offers),
-            "availability": "https://schema.org/InStock",
-        },
+        "offers": {"@type": "AggregateOffer", "priceCurrency": "EUR", "lowPrice": min(offers), "highPrice": max(offers), "availability": "https://schema.org/InStock"},
     }
 
     title = f"{p['card_name']} · 3Deca"
     desc = f"{p['summary']} {price_label(p).capitalize()} ex VAT. Designed by a production sound mixer."
     out = head(root, title, desc, url, json_ld(ld))
-    out += '<body class="page-product">\n'
-    out += header(root)
+    out += '<body class="page-product">\n' + header(root)
     out += f"""<main id="main">
   <div class="container">
     <nav class="breadcrumb" aria-label="Breadcrumb">
       <ol>
         <li><a href="{home_href(root)}">Home</a></li>
-        <li><a href="{home_href(root)}#gear">Gear</a></li>
+        <li><a href="{home_href(root)}#shop">Shop</a></li>
         <li><span aria-current="page">{e(p['name'])}</span></li>
       </ol>
     </nav>
 
     <section class="product" aria-labelledby="product-title">
       <div class="product-gallery">
-        <div class="product-stage">
+        <div class="stage">
           <button type="button" class="stage-btn" data-open="0" data-stage aria-label="Enlarge photo">
-            {picture(root, keys[0], p['images'][0], '(min-width: 1000px) 55vw, 100vw', 'stage-img', eager=True)}
+            {picture(root, keys[0], alts[0], '(min-width: 1000px) 58vw, 100vw', 'stage-img', eager=True)}
           </button>
-          {hud(f'ITEM {i + 1:02d} · {slug.upper()}')}
+          <span class="stage-count" aria-hidden="true" data-stage-count>01 / {n:02d}</span>
         </div>
         <ul class="thumbs" role="list" aria-label="Photos">{thumbs}</ul>
       </div>
 
       <div class="product-info">
-        <p class="kicker">{i + 1:02d} / {len(PRODUCTS):02d} · {e(p['brand'])}</p>
+        <p class="product-meta"><span class="code">{p['code']}</span><span>{e(p['brand'])}</span></p>
         <h1 id="product-title" class="product-title">{e(p['name'])}</h1>
         <p class="product-tagline">{e(p['tagline'])}</p>
-        <p class="product-price"><span class="price-big">{price_label(p)}</span><span class="price-note">ex VAT · free EU shipping above {euro(SITE['free_shipping_threshold'])}</span></p>
-        <p class="product-summary">{e(p['summary'])}</p>
-        <p class="product-fits"><span class="fits-label">Fits</span> {e(p['fits'])}</p>
-        <ul class="feature-list" role="list">{features}</ul>
-        {f'<p class="product-note">{e(p["note"])}</p>' if p.get('note') else ''}
+        <p class="product-price"><span class="price-big" data-price-display>{price_label(p)}</span><span class="price-note">ex VAT</span></p>
+        <p class="product-desc">{e(p['description'])}</p>
 
-        <table class="price-table">
-          <caption class="sr-only">Options and prices, ex VAT</caption>
-          <tbody>{option_rows}</tbody>
-        </table>
-
-        <form class="add-form" action="{home_href(root)}" method="get" data-add-form>
+        <form class="buy-box" action="{home_href(root)}" method="get" data-add-form>
           <input type="hidden" name="add" value="{slug}">
-          {f'<div class="add-opts">{selects}</div>' if selects else ''}
-          <div class="add-row">
-            <label class="field field-qty"><span class="field-label">Qty</span><input type="number" name="qty" min="1" max="50" value="1" inputmode="numeric"></label>
-            <button class="btn btn-accent" type="submit">Add to order <span aria-hidden="true">→</span></button>
+          {option_groups}
+          <div class="buy-row">
+            <div class="stepper" role="group" aria-label="Quantity">
+              <button type="button" class="step" data-qty-step="-1" aria-label="One less">−</button>
+              <input type="number" name="qty" min="1" max="50" value="1" inputmode="numeric" aria-label="Quantity">
+              <button type="button" class="step" data-qty-step="1" aria-label="One more">+</button>
+            </div>
+            <button class="btn btn-ink btn-grow" type="submit">Add to order <span aria-hidden="true">→</span></button>
           </div>
+          {buy}
+          {f'<p class="product-note">{e(p["note"])}</p>' if p.get('note') else ''}
           <a class="text-link" href="mailto:{SITE['email']}?subject={e('Custom request: ' + p['name'])}">Ask about a custom build</a>
         </form>
+
+        <ul class="assurances" role="list">
+          <li>Printed in sturdy carbon / nylon</li>
+          <li>Free EU shipping above {euro(SITE['free_shipping_threshold'])}</li>
+          <li>Designed and used on set</li>
+        </ul>
       </div>
     </section>
   </div>
 
-  <section class="section field-shots" aria-labelledby="shots-title">
-    <div class="container">
-      <div class="section-head" data-reveal>
-        <p class="kicker">All photos · {n:02d}</p>
-        <h2 id="shots-title" class="section-title">Seen on set.</h2>
+  <section class="section details" aria-labelledby="details-title">
+    <div class="container details-grid">
+      <div>
+        <p class="eyebrow">Details</p>
+        <h2 id="details-title" class="section-title">Why mixers like it.</h2>
+        <ul class="highlights" role="list">{highlights}</ul>
       </div>
-      <ul class="shots" role="list">{gallery}</ul>
+      <div>
+        <h3 class="table-title">Specifications</h3>
+        <table class="spec-table"><tbody>{specs}</tbody></table>
+      </div>
     </div>
   </section>
 
-  <nav class="section more" aria-label="More gear">
-    <div class="container more-grid">
-      <a class="more-link" href="{product_href(root, prev_p['slug'])}">
-        <span class="kicker">← Previous</span><span class="more-name">{e(prev_p['name'])}</span><span class="price">{price_label(prev_p)}</span>
-      </a>
-      <a class="more-link more-next" href="{product_href(root, next_p['slug'])}">
-        <span class="kicker">Next →</span><span class="more-name">{e(next_p['name'])}</span><span class="price">{price_label(next_p)}</span>
-      </a>
+  <section class="section field" aria-labelledby="field-title">
+    <div class="container">
+      <div class="section-bar">
+        <div>
+          <p class="eyebrow">Photos · {len(pkeys)}</p>
+          <h2 id="field-title" class="section-title">Seen on set.</h2>
+        </div>
+      </div>
+      <ul class="shots" role="list">{field}</ul>
     </div>
-  </nav>
+  </section>
+
+  <section class="section related" aria-labelledby="related-title">
+    <div class="container">
+      <div class="section-bar">
+        <h2 id="related-title" class="section-title">You may also need.</h2>
+        <a class="text-link" href="{home_href(root)}#shop">All products</a>
+      </div>
+      <ul class="cards cards-3" role="list">{rel}</ul>
+    </div>
+  </section>
 </main>
 
 <dialog class="lightbox" data-lightbox aria-label="Photo viewer">
@@ -639,10 +692,9 @@ def build_product(i, p):
   <button type="button" class="lb-btn lb-next" data-lb-next aria-label="Next photo">→</button>
   <p class="lb-count" data-lb-count aria-live="polite"></p>
 </dialog>
-<script type="application/json" id="gallery-data">{json.dumps({'lightbox': lightbox_data, 'stage': main_srcs}, ensure_ascii=False)}</script>
+<script type="application/json" id="gallery-data">{json.dumps(gallery_data, ensure_ascii=False)}</script>
 """
-    out += footer(root)
-    out += "</body>\n</html>\n"
+    out += footer(root) + "</body>\n</html>\n"
     d = OUT / slug
     d.mkdir(parents=True, exist_ok=True)
     (d / "index.html").write_text(out, encoding="utf-8")
@@ -653,22 +705,22 @@ def build_404():
     out = head(root, "Page not found · 3Deca", "This page doesn't exist.", SITE["url"] + "/404.html")
     out = out.replace('<meta name="description"', '<meta name="robots" content="noindex">\n<meta name="description"')
     out += '<body class="page-404">\n' + header(root)
-    out += f"""<main id="main" class="notfound container">
-  <p class="kicker">Error 404 · No signal</p>
-  <h1 class="section-title">Lost the feed.</h1>
-  <p class="section-lead">This page doesn't exist (anymore). The gear is still here.</p>
-  <a class="btn btn-accent" href="/#gear">Back to the gear</a>
+    out += """<main id="main" class="notfound container">
+  <p class="eyebrow">Error 404</p>
+  <h1 class="section-title">This page doesn't exist.</h1>
+  <p class="section-lead">It may have moved when the site was renewed. The gear is still here.</p>
+  <a class="btn btn-ink" href="/#shop">Go to the shop <span aria-hidden="true">→</span></a>
 </main>
 """
     out += footer(root) + "</body>\n</html>\n"
-    (PUBLIC / "404.html").write_text(out, encoding="utf-8")
+    (OUT / "404.html").write_text(out, encoding="utf-8")
 
 
 def build_sitemap():
     today = datetime.date.today().isoformat()
     urls = [SITE["url"] + "/"] + [f"{SITE['url']}/{p['slug']}/" for p in PRODUCTS]
     body = "".join(f"<url><loc>{u}</loc><lastmod>{today}</lastmod></url>" for u in urls)
-    (PUBLIC / "sitemap.xml").write_text(
+    (OUT / "sitemap.xml").write_text(
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         f'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{body}</urlset>\n',
         encoding="utf-8",
@@ -676,6 +728,7 @@ def build_sitemap():
 
 
 def main():
+    OUT.mkdir(parents=True, exist_ok=True)
     build_home()
     for i, p in enumerate(PRODUCTS):
         build_product(i, p)

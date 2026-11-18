@@ -9,69 +9,100 @@
     "description": "Sturdy carbon/nylon set gear for production sound mixers: mounts, belt clips and storage caddies for Zaxcom, Sennheiser and Wisycom. Designed and used on set."
   },
   "intro": {
-    "eyebrow": "Hi and welcome!",
-    "title": "Built on set. For the set.",
-    "lead": "I'm a production sound mixer based in Europe. We made these items because we felt we needed them on the set. I use them daily, and so do my colleagues.",
+    "eyebrow": "Set gear for production sound",
+    "lead": "I'm a production sound mixer based in Europe. We made these items because we needed them on the set. I use them daily, and so do my colleagues.",
     "hero_image": "zmtstoragebox/01",
-    "hero_alt": "Eight Zaxcom ZMT transmitters lined up in a black 3D-printed storage box on a warm wooden table, antennas raised."
+    "hero_alt": "Eight Zaxcom ZMT transmitters lined up in a black 3D-printed storage box on a warm wooden table, antennas raised.",
+    "hero_product": "zmtstoragebox"
   },
   "facts": [
-    "Carbon / Nylon",
-    "Used daily on set",
-    "Free EU shipping above €130",
-    "Custom builds on request",
-    "Prices ex VAT"
+    { "title": "Carbon / nylon", "text": "Sturdy, clean prints. No flimsy stuff." },
+    { "title": "Used daily on set", "text": "Designed by a working sound mixer." },
+    { "title": "Free EU shipping", "text": "On orders above €130." },
+    { "title": "Custom builds", "text": "Bay counts and fits for your case." }
   ],
-  "values": [
+  "systems": ["Zaxcom", "Sennheiser", "Batteries"],
+  "in_use": [
+    { "image": "zmt-mount/02", "caption": "Plant mic on the beach, rigged with the ZMT mount.", "product": "zmt-mount" },
+    { "image": "batterybeltclip/02", "caption": "Battery belt clip on a period shoot.", "product": "batterybeltclip" },
+    { "image": "zmt-mount/07", "caption": "Car rig: the mount holds the mic by the gear stick.", "product": "zmt-mount" },
+    { "image": "zmtstoragebox/05", "caption": "Custom insert for a sound case.", "product": "zmtstoragebox" }
+  ],
+  "custom": {
+    "title": "Need a different fit?",
+    "text": "Other bay counts, battery types or an insert for your case. Tell me what you use and I'll make it fit."
+  },
+  "faq": [
     {
-      "title": "Sturdy carbon / nylon",
-      "text": "Printed from carbon-reinforced nylon. No flimsy stuff: these parts live on belts, carts and car dashboards."
+      "q": "How do I order?",
+      "a": "Use the order form on this site or email info@3deca.com. I'll confirm your order and send payment details."
     },
     {
-      "title": "Designed by a working mixer",
-      "text": "Every piece started as a problem on a real set. If it didn't make the job easier, it didn't make the cut."
+      "q": "Are prices with or without VAT?",
+      "a": "All prices are ex VAT. Contact me if you need a commercial invoice."
     },
     {
-      "title": "Made to fit your kit",
-      "text": "Need a different bay count, battery type or a fit for your case? Ask, and I'll build it."
+      "q": "What does shipping cost?",
+      "a": "Shipping within the EU is free on orders above €130. For smaller orders or shipping outside the EU, ask and I'll let you know."
+    },
+    {
+      "q": "Can you make a custom size or fit?",
+      "a": "Yes. Storage boxes and caddies come in different bay counts, and I can make inserts for your case. Send me your setup."
+    },
+    {
+      "q": "What are the products made of?",
+      "a": "Sturdy carbon / nylon. The Euronorm case support for the Sennheiser caddy is made of ABS."
     }
   ],
   "ordering": {
-    "title": "How ordering works",
     "points": [
-      "For now, orders go via the order form or by email only.",
-      "Prices are ex VAT. Contact me for a commercial invoice.",
-      "Free EU shipping above €130.",
-      "Questions or suggestions? Contact me any time."
+      "Orders via the form or by email",
+      "Prices ex VAT, commercial invoice on request",
+      "Free EU shipping above €130"
     ]
   },
   "products": [
     {
       "slug": "zmt-mount",
+      "code": "3D-01",
       "name": "ZMT Mount",
       "card_name": "Zaxcom ZMT mount",
+      "system": "Zaxcom",
       "brand": "Zaxcom",
       "fits": "Zaxcom ZMT",
       "tagline": "Put your plant mic exactly where you want it.",
       "price": 55,
       "price_from": true,
       "summary": "A holder that mounts a Zaxcom ZMT transmitter to a tripod, clamp, grip head, magic arm, superclamp or any metal surface.",
-      "features": [
+      "description": "Plant mics go where the scene needs them, and the transmitter has to go with them. This mount holds a Zaxcom ZMT in a snug cradle and fixes it to a stand, clamp, grip head, magic arm or superclamp. Or skip the hardware: the strong, rubber-coated magnet sticks to any metal surface, from door frames to car bodies.",
+      "highlights": [
         "Strong magnet on the back, rubber-coated so it won't scratch",
         "Two standard 3/8\" threads, on the back and on the bottom",
-        "Flexible mounting options to place your mic exactly where you want it",
-        "Great for car mounts",
-        "Snug fit: hangs upside down without dropping the transmitter"
+        "Snug fit: hangs upside down without dropping the transmitter",
+        "Great for car mounts"
+      ],
+      "specs": [
+        ["Fits", "Zaxcom ZMT transmitters"],
+        ["Mounting", "Magnet + 2× 3/8\" thread (back, bottom)"],
+        ["Material", "Carbon / nylon"],
+        ["Versions", "With magnet €65 · Without magnet €55"]
       ],
       "options": [
         {
           "label": "Version",
           "priced": true,
           "choices": [
-            { "label": "With magnet", "price": 65 },
-            { "label": "Without magnet", "price": 55 }
+            { "label": "With magnet", "price": 65, "checkout_url": "" },
+            { "label": "Without magnet", "price": 55, "checkout_url": "" }
           ]
         }
+      ],
+      "hover": "02",
+      "studio": [
+        "Studio shot: a Zaxcom ZMT transmitter with lav mic and antenna seated in the black ZMT mount.",
+        "Studio shot of the back of the ZMT mount: the round rubber-coated magnet and a brass 3/8 inch thread.",
+        "Studio shot of the empty ZMT mount, showing the cradle for the transmitter.",
+        "Studio shot of the ZMT mount with its brass thread insert facing up."
       ],
       "images": [
         "A Zaxcom ZMT transmitter with lavalier mic and antenna seated in the black ZMT mount on concrete.",
@@ -86,19 +117,28 @@
     },
     {
       "slug": "batterybeltclip",
+      "code": "3D-02",
       "name": "Battery Belt Clip",
       "card_name": "Belt clip for NP-50 / LBP61 and AA batteries",
+      "system": "Batteries",
       "brand": "NP-50 · Wisycom · AA",
       "fits": "2× NP-50 or Wisycom LBP61 + 3 or 4 AA",
-      "tagline": "I'm sure you've wished you had this on your belt. Many times.",
+      "tagline": "Fresh batteries, one hand away.",
       "price": 40,
       "price_from": false,
       "summary": "A belt clip that carries two NP-50 or Wisycom LBP61 batteries plus 3 or 4 AA batteries, always within reach.",
-      "features": [
+      "description": "I'm sure you've wished you had this on your belt, many times. The clip carries two NP-50 or Wisycom LBP61 batteries plus three or four AA cells, each one easy to grab with one hand. A strong spring-loaded clip keeps it on your belt, and an extra mounting hole takes a roll of tape or other accessories.",
+      "highlights": [
         "Easy access with one hand",
         "Strong spring-loaded belt clip",
         "Extra mounting hole to hang tape or accessories",
-        "Custom holders possible (for example 4× NP-50)"
+        "Custom holders possible, for example 4× NP-50"
+      ],
+      "specs": [
+        ["Holds", "2× NP-50 or Wisycom LBP61 + 3 or 4× AA"],
+        ["Clip", "Spring-loaded belt clip"],
+        ["Material", "Carbon / nylon"],
+        ["Custom", "Other battery layouts on request"]
       ],
       "note": "Please specify NP-50 or LBP61, and 3 or 4 AA, when you order.",
       "options": [
@@ -113,6 +153,13 @@
           "choices": [{ "label": "4× AA" }, { "label": "3× AA" }]
         }
       ],
+      "checkout_url": "",
+      "hover": "02",
+      "studio": [
+        "Studio shot of the battery belt clip loaded with two NP-50 batteries and four AA batteries, a roll of tape on its mounting hole.",
+        "Studio shot of the belt clip from above, showing the AA and NP-50 slots.",
+        "Studio shot of the belt clip at an angle, showing the spring-loaded clip."
+      ],
       "images": [
         "The battery belt clip loaded with two NP-50 batteries and four AA batteries, a roll of tape hanging from its extra mounting hole.",
         "The belt clip worn on set, with a black horse and a costumed actor in the background.",
@@ -124,18 +171,27 @@
     },
     {
       "slug": "urxbeltclip",
+      "code": "3D-03",
       "name": "URX Sleeve",
       "card_name": "Zaxcom URX sleeve",
+      "system": "Zaxcom",
       "brand": "Zaxcom",
       "fits": "Zaxcom URX 50 / URX 100",
       "tagline": "Protection that never gets in the way.",
       "price": 45,
       "price_from": false,
       "summary": "A belt clip sleeve that protects your Zaxcom URX 50 or URX 100 receiver.",
-      "features": [
+      "description": "A slim belt clip sleeve for the Zaxcom URX 50 and URX 100. It protects the receiver on your belt while every connector and button stays uncovered. When it's time for fresh batteries, the receiver comes out quickly and easily.",
+      "highlights": [
         "Protects your URX 100 / 50",
         "Easy access to all connectors and buttons",
         "Very easy and quick to take out and change batteries"
+      ],
+      "specs": [
+        ["Fits", "Zaxcom URX 50 / URX 100"],
+        ["Access", "All connectors and buttons"],
+        ["Mounting", "Belt clip"],
+        ["Material", "Carbon / nylon"]
       ],
       "options": [
         {
@@ -143,6 +199,14 @@
           "priced": false,
           "choices": [{ "label": "URX 100" }, { "label": "URX 50" }]
         }
+      ],
+      "checkout_url": "",
+      "hover": "02",
+      "studio": [
+        "Studio shot of a Zaxcom URX receiver standing upright in the black sleeve, display and buttons visible.",
+        "Studio shot of the front of the receiver in the sleeve with all control buttons uncovered.",
+        "Studio shot of the empty sleeve, showing the openings at the bottom for battery changes.",
+        "Studio shot of the sleeve from the side with its belt clip."
       ],
       "images": [
         "A Zaxcom URX receiver in its black sleeve on concrete, antenna attached.",
@@ -156,19 +220,28 @@
     },
     {
       "slug": "zmtstoragebox",
+      "code": "3D-04",
       "name": "ZMT Storage Box",
       "card_name": "Zaxcom ZMT storage caddy",
+      "system": "Zaxcom",
       "brand": "Zaxcom",
       "fits": "8× Zaxcom ZMT + spare antennas + 8× NP-50",
       "tagline": "Eight transmitters, one glance.",
       "price": 75,
       "price_from": false,
       "summary": "A box that stores 8 Zaxcom ZMT transmitters, spare antennas and 8 NP-50 batteries.",
-      "features": [
+      "description": "One box for your ZMT kit: eight Zaxcom ZMT transmitters, their spare antennas and eight NP-50 batteries, each in its own place. Open the case and you see at once what's back and what's still out. Need it to fit your case? The box is made to order in 4, 5, 6, 8 or 10 bays.",
+      "highlights": [
         "Holds 8 Zaxcom ZMT transmitters",
         "Room for spare antennas and 8× NP-50 batteries",
         "Custom dimensions to fit your case: 4, 5, 6, 8 or 10 bays",
         "Optional radio mic storage box"
+      ],
+      "specs": [
+        ["Holds", "8× ZMT + spare antennas + 8× NP-50"],
+        ["Sizes", "4, 5, 6, 8 or 10 bays (8 is standard)"],
+        ["Option", "Radio mic storage box"],
+        ["Material", "Carbon / nylon"]
       ],
       "note": "Custom sizes and the radio mic storage box are made on request. Contact me with your setup.",
       "options": [
@@ -176,10 +249,14 @@
           "label": "Size",
           "priced": true,
           "choices": [
-            { "label": "Standard, 8 bays", "price": 75 },
+            { "label": "Standard, 8 bays", "price": 75, "checkout_url": "" },
             { "label": "Custom bay count (quote)", "price": null }
           ]
         }
+      ],
+      "hover": "01",
+      "studio": [
+        "Studio shot of the storage box holding eight Zaxcom ZMT transmitters with antennas and NP-50 batteries."
       ],
       "images": [
         "Eight Zaxcom ZMT transmitters in the black storage box on a warm wooden table.",
@@ -192,27 +269,37 @@
     },
     {
       "slug": "np50box",
+      "code": "3D-05",
       "name": "NP-50 / LBP61 Box",
       "card_name": "Storage box for NP-50 / Wisycom LBP61",
+      "system": "Batteries",
       "brand": "NP-50 · Wisycom",
       "fits": "NP-50 or Wisycom LBP61 batteries",
       "tagline": "Charged, sorted, ready.",
       "price": 35,
       "price_from": true,
       "summary": "A holder to store NP-50 or Wisycom batteries, plus a 4-bay caddy that can mount on an ORCA side pouch.",
-      "features": [
+      "description": "Keep your batteries sorted and protected. Choose the battery holder, or the 4-bay caddy that mounts on an ORCA side pouch so spares travel right on your bag. Every variant is also available for Wisycom batteries, and you can pick black, red or green.",
+      "highlights": [
         "Holder for NP-50 / Wisycom batteries",
         "4-bay caddy with optional ORCA side pouch mount",
         "All variants also available for Wisycom batteries",
         "Green and red colour options available"
+      ],
+      "specs": [
+        ["Models", "Battery holder €40 · 4-bay caddy €35"],
+        ["Batteries", "NP-50 or Wisycom LBP61"],
+        ["Mounting", "ORCA side pouch (4-bay caddy)"],
+        ["Colours", "Black, red, green"],
+        ["Material", "Carbon / nylon"]
       ],
       "options": [
         {
           "label": "Model",
           "priced": true,
           "choices": [
-            { "label": "Battery holder", "price": 40 },
-            { "label": "4-bay caddy with ORCA side pouch mount", "price": 35 }
+            { "label": "Battery holder", "price": 40, "checkout_url": "" },
+            { "label": "4-bay caddy, ORCA mount", "price": 35, "checkout_url": "" }
           ]
         },
         {
@@ -226,6 +313,12 @@
           "choices": [{ "label": "Black" }, { "label": "Red" }, { "label": "Green" }]
         }
       ],
+      "hover": "04",
+      "studio": [
+        "Studio shot of the 4-bay caddy with batteries, seen from the front with its side pouch fitting.",
+        "Studio shot of the battery holder from above, eight NP-50 batteries with gold contacts facing up.",
+        "Studio shot of the 4-bay caddy holding four batteries."
+      ],
       "images": [
         "The battery holder from above, eight NP-50 batteries with gold contacts facing up.",
         "The 4-bay caddy holding four batteries, on concrete.",
@@ -238,20 +331,35 @@
     },
     {
       "slug": "sennheiserbeltclip",
+      "code": "3D-06",
       "name": "Sennheiser Belt Clip",
       "card_name": "Sennheiser G3 / G4 belt clip",
+      "system": "Sennheiser",
       "brand": "Sennheiser",
       "fits": "Sennheiser G3 / G4 receivers",
       "tagline": "Low profile. Locked in.",
       "price": 25,
       "price_from": false,
       "summary": "An alternative belt clip for Sennheiser G3 / G4 receivers.",
-      "features": [
+      "description": "An alternative belt clip for Sennheiser G3 and G4 receivers. It keeps a low profile on the body, it's sturdy, and it holds the receiver securely. It comes with the belt clip, and the original Sennheiser clip is included.",
+      "highlights": [
         "Low profile and sturdy",
         "Secure fit",
         "Comes with the belt clip and the original Sennheiser clip included"
       ],
+      "specs": [
+        ["Fits", "Sennheiser G3 / G4 receivers"],
+        ["Included", "Belt clip + original Sennheiser clip"],
+        ["Material", "Carbon / nylon"]
+      ],
       "options": [],
+      "checkout_url": "",
+      "hover": "02",
+      "studio": [
+        "Studio shot of the back of a Sennheiser receiver with the low-profile clip and the original Sennheiser clip mounted.",
+        "Studio shot of the belt clip on its own.",
+        "Studio shot of a Sennheiser receiver fitted with the belt clip, side view."
+      ],
       "images": [
         "Side view of a Sennheiser receiver fitted with the low-profile belt clip.",
         "The receiver clipped to a belt, under a chunky knitted sweater.",
@@ -261,19 +369,28 @@
     },
     {
       "slug": "sennheiser-caddy",
+      "code": "3D-07",
       "name": "Sennheiser IEM Caddy",
       "card_name": "Storage caddy for Sennheiser IEM G3 / G4",
+      "system": "Sennheiser",
       "brand": "Sennheiser",
       "fits": "Sennheiser IEM G3 / G4 Tx / Rx",
       "tagline": "Hit me with your custom setup requests.",
       "price": 55,
       "price_from": true,
       "summary": "A sturdy caddy to store Sennheiser G3 / G4 transmitters and receivers.",
-      "features": [
+      "description": "A sturdy caddy for Sennheiser IEM G3 and G4 transmitters and receivers. The fit is snug enough to hold them even upside down, and a recess leaves room for the headphone knob. Caddies are made in 2 to 12 bays, including a custom 8-bay with an ABS support that fits a standard Euronorm case perfectly.",
+      "highlights": [
         "Snug fit: it holds your receivers even upside down",
         "Custom dimensions to fit your case: 2, 4, 6, 8, 10 or 12 bays",
-        "Custom 8-bay with a support for a perfect fit in a standard Euronorm case (support in sturdy ABS)",
+        "Custom 8-bay with a support for a perfect fit in a standard Euronorm case",
         "Recess for the headphone knob"
+      ],
+      "specs": [
+        ["Fits", "Sennheiser IEM G3 / G4 Tx / Rx"],
+        ["Sizes", "2, 4, 6, 8, 10 or 12 bays"],
+        ["Case fit", "Custom 8-bay for a standard Euronorm case"],
+        ["Material", "Carbon / nylon, support in ABS"]
       ],
       "note": "Prices start at €55 and depend on the number of bays. Contact me with your request.",
       "options": [
@@ -286,6 +403,11 @@
           ]
         }
       ],
+      "hover": "02",
+      "studio": [
+        "Studio shot of six Sennheiser G4 receivers standing in a black caddy.",
+        "Studio shot of an empty 6-bay caddy."
+      ],
       "images": [
         "Six Sennheiser G4 receivers standing in a black caddy on concrete.",
         "A custom 8-bay caddy fitted at the bottom of a grey Euronorm case.",
@@ -297,15 +419,15 @@
   ],
   "reviews": [
     {
-      "quote": "Hey, package received, I love 'em! Thanks a lot! Cheers",
-      "name": "Till Röllinghoff",
-      "city": "Berlin"
-    },
-    {
       "quote": "It's a very well-thought-out bit of kit and clearly coming from someone with experience on set with very specific things he needed to make things easier. My favourite bit so far is the threaded ZMT mount with a magnetic back. Works very well for sticking it to the ceiling and doors for plant mics. Love the threaded hole for connecting it to different types of arms. The magnet is really strong. No flimsy stuff. Also one of the cleanest 3D print finishes I've seen so far.",
       "name": "Sãm Kashefi",
       "city": "NYC",
       "featured": true
+    },
+    {
+      "quote": "Hey, package received, I love 'em! Thanks a lot! Cheers",
+      "name": "Till Röllinghoff",
+      "city": "Berlin"
     },
     {
       "quote": "These are amazing! The rubber on the magnet is such a nice touch. I'll be putting them to good use ASAP. Thanks again!",

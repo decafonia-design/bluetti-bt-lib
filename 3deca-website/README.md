@@ -5,21 +5,27 @@ De map `public/` **is** de website. Je zet die map online en klaar.
 
 ## Wat er nieuw is
 
-- **Donker, filmisch design** rond één idee: de site ziet eruit als een cameramonitor op de set.
-  REC-lampje, lopende *time-of-day* tijdcode (25 fps) en audiometers die meebewegen als je scrolt.
-- **Bestelmodule**: bezoekers kiezen producten, varianten en aantallen. Het subtotaal (ex btw) en een
-  "verzendmeter" tot €130 (gratis EU-verzending) lopen live mee. Bij verzenden opent hun mailprogramma
-  met de volledige bestelling ingevuld naar info@3deca.com, en er is een kopieerknop als dat niet lukt.
-  Er is geen server of betaalsysteem nodig. Dat past bij "orders via contactform or email only".
-- **Productpagina's** met grote foto, fotostrip, fotoviewer (pijltjestoetsen of vegen op telefoon), prijzen per
-  optie en een knop "Add to order".
+- **Modernistisch ontwerp**: wit en lichtgrijs, strak raster, zwarte grotesk-letter (Archivo), één
+  signaalkleur (oranje) en productcodes (3D-01 … 3D-07) zoals in een catalogus.
+- **Duidelijke productfoto's**: elk product staat vrijstaand op een rustige lichtgrijze studio-achtergrond met
+  zachte schaduw. Die zijn gemaakt uit je eigen foto's. Ga je met de muis over een product, dan zie je het in
+  gebruik op de set.
+- **Betere beschrijvingen**: per product een tekst vanuit het gebruik op de set, een lijst "Why mixers like it"
+  en een specificatietabel. Alles is gebaseerd op de informatie van de oude site, er is niets verzonnen.
+- **Shop met filters** per systeem (Zaxcom, Sennheiser, batterijen), een tegel "Need a different fit?" voor
+  maatwerk, een strook "In use" met foto's van de set, reviews, en een FAQ.
+- **Productpagina's**: grote fotoviewer (studio- en setfoto's), keuzeknoppen per variant die de prijs live
+  aanpassen, een aantalkeuze, "Add to order", en "You may also need" met gerelateerde producten.
+- **Bestelmodule**: bezoekers stellen een bestelling samen (met productcodes). Ze zien het subtotaal ex btw
+  en hoeveel ze nog nodig hebben voor gratis EU-verzending. Bij verzenden opent hun mailprogramma met
+  alles ingevuld.
+- **Klaar voor een webshop**: vul betaallinks in `content.json` in en er verschijnt een knop "Buy now". Zie `WEBSHOP.md`.
 - **Toegankelijk**: getest met axe-core (WCAG 2.2 AA) zonder fouten, volledig met het toetsenbord te
-  bedienen, een "skip to content"-link, alt-teksten bij elke foto, en de animaties staan uit als de
-  bezoeker dat in zijn systeem heeft ingesteld.
-- **Snel en privé**: foto's van 23 MB teruggebracht naar ±4,5 MB (WebP, twee formaten per foto). Lettertypes
-  staan op de eigen server, dus geen Google Fonts. Geen cookies, geen trackers, dus ook geen cookiebanner nodig.
-- **Vindbaar**: nette URL's (dezelfde als nu, bv. `/zmt-mount/`), meta-beschrijvingen, deelafbeelding voor
-  sociale media, productgegevens voor Google (schema.org), `sitemap.xml` en `robots.txt`.
+  bedienen, alt-teksten bij elke foto, en de animaties staan uit als de bezoeker dat in zijn systeem heeft ingesteld.
+- **Snel en privé**: alle foto's samen zijn ±5 MB (WebP, twee formaten per foto). Lettertypes staan op de
+  eigen server. Geen cookies, geen trackers, dus ook geen cookiebanner nodig.
+- **Vindbaar**: dezelfde URL's als nu (bv. `/zmt-mount/`), productgegevens voor Google (schema.org,
+  inclusief productcode), `sitemap.xml`, en een deelafbeelding voor sociale media.
 
 ## Mappen
 
@@ -42,7 +48,8 @@ De map `public/` **is** de website. Je zet die map online en klaar.
 3. Zet de gewijzigde bestanden uit `public/` opnieuw online.
 
 Wil je een foto toevoegen? Zet `NN-720.webp` en `NN-1600.webp` in `public/img/<product>/` en voeg
-een alt-tekst toe aan de `images`-lijst van dat product in `content.json`.
+een alt-tekst toe aan de `images`-lijst van dat product in `content.json`. Studiofoto's heten
+`s1-720.webp`, `s1-1600.webp`, … en horen bij de `studio`-lijst.
 
 ## Online zetten
 
@@ -72,3 +79,5 @@ Open daarna http://localhost:8000.
   Op de nieuwe site staat overal LBP61. Klopt dat?
 - De ZMT-mount krijgt de vermelding "rubber-coated magnet". Dat komt uit een review van een klant.
 - De bestelmodule groet in de e-mail met "Hi Jan". Dat kun je aanpassen in `public/js/main.js`.
+- De korte slogans per product en de uitgebreidere beschrijvingen zijn herschreven op basis van de oude teksten. Lees ze even na.
+- Webshop: zie `WEBSHOP.md` voor de opties, kosten en mijn advies.

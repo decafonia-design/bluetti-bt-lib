@@ -5,8 +5,9 @@
   var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   var $ = function (sel, el) { return (el || document).querySelector(sel); };
   var $$ = function (sel, el) { return Array.prototype.slice.call((el || document).querySelectorAll(sel)); };
+  var euro = function (n) { return "€" + (Math.round(n * 100) / 100).toString(); };
 
-  /* ---------- storage (fails quietly in private mode) ---------- */
+  /* ---------- order storage (fails quietly in private mode) ---------- */
   var KEY = "3deca-order-v1";
   function loadOrder() {
     try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; }
@@ -14,11 +15,8 @@
   function saveOrder(order) {
     try { localStorage.setItem(KEY, JSON.stringify(order)); } catch (e) { /* ignore */ }
   }
-  function orderCount(order) {
-    return Object.keys(order).reduce(function (n, k) { return n + (order[k].qty || 0); }, 0);
-  }
   function updateBadge(order) {
-    var n = orderCount(order);
+    var n = Object.keys(order).reduce(function (s, k) { return s + (order[k].qty || 0); }, 0);
     $$("[data-order-count]").forEach(function (el) {
       el.textContent = n;
       el.hidden = n === 0;
@@ -27,14 +25,6 @@
   }
   updateBadge(loadOrder());
 
-  /* ---------- header: solid once you scroll past the top ---------- */
-  var header = $("[data-header]");
-  if (header) {
-    var onScroll = function () { header.classList.toggle("is-solid", window.scrollY > 40); };
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-  }
-
   /* ---------- mobile navigation ---------- */
   var toggle = $("[data-nav-toggle]");
   var nav = $("#site-nav");
@@ -42,7 +32,6 @@
     var setOpen = function (open) {
       toggle.setAttribute("aria-expanded", String(open));
       nav.classList.toggle("is-open", open);
-      if (header && open) header.classList.add("is-solid");
     };
     toggle.addEventListener("click", function () { setOpen(toggle.getAttribute("aria-expanded") !== "true"); });
     nav.addEventListener("click", function (e) { if (e.target.closest("a")) setOpen(false); });
@@ -51,94 +40,76 @@
     });
   }
 
-  /* ---------- time-of-day timecode, 25 fps ---------- */
+  /* ---------- time-of-day timecode (25 fps) on the hero photo ---------- */
   var tcEls = $$("[data-timecode]");
-  function pad(n) { return (n < 10 ? "0" : "") + n; }
-  function timecode() {
-    var d = new Date();
-    return pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds()) + ":" + pad(Math.floor(d.getMilliseconds() / 40));
-  }
-
-  /* ---------- level meters ---------- */
-  var meters = $$("[data-meter]").map(function (el, i) {
-    return { el: el, level: 0.4, target: 0.5, peakHold: 0, seed: i };
-  });
-  var energy = 0; // grows with scrolling / pointer movement, decays over time
-  window.addEventListener("scroll", function () { energy = Math.min(1, energy + 0.06); }, { passive: true });
-  window.addEventListener("pointermove", function () { energy = Math.min(1, energy + 0.015); }, { passive: true });
-
-  function tickMeters() {
-    energy *= 0.96;
-    meters.forEach(function (m) {
-      if (Math.random() < 0.18) {
-        // speech-like bursts, louder when the visitor is "making noise"
-        m.target = 0.25 + Math.random() * 0.45 + energy * 0.35;
-        if (Math.random() < 0.05) m.target = 0.92 + Math.random() * 0.08;
-      }
-      var speed = m.target > m.level ? 0.45 : 0.12; // fast attack, slow release
-      m.level += (m.target - m.level) * speed;
-      m.el.style.setProperty("--lvl", Math.max(0.05, Math.min(1, m.level)).toFixed(3));
-    });
-  }
-
-  if (tcEls.length || meters.length) {
+  if (tcEls.length) {
+    var pad = function (n) { return (n < 10 ? "0" : "") + n; };
+    var tc = function () {
+      var d = new Date();
+      return pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds()) + ":" + pad(Math.floor(d.getMilliseconds() / 40));
+    };
     if (reduceMotion) {
-      tcEls.forEach(function (el) { el.textContent = timecode(); });
-      meters.forEach(function (m, i) { m.el.style.setProperty("--lvl", i % 2 ? "0.52" : "0.6"); });
+      tcEls.forEach(function (el) { el.textContent = tc(); });
     } else {
       var last = 0;
       var loop = function (t) {
-        if (t - last >= 40) {
-          last = t;
-          var tc = timecode();
-          tcEls.forEach(function (el) { el.textContent = tc; });
-          tickMeters();
-        }
+        if (t - last >= 40) { last = t; var v = tc(); tcEls.forEach(function (el) { el.textContent = v; }); }
         requestAnimationFrame(loop);
       };
       requestAnimationFrame(loop);
     }
   }
 
-  /* ---------- reveal on scroll ---------- */
-  var revealEls = $$("[data-reveal]");
-  if ("IntersectionObserver" in window && !reduceMotion) {
-    var io = new IntersectionObserver(function (entries) {
-      entries.forEach(function (entry) {
-        if (entry.isIntersecting) { entry.target.classList.add("is-visible"); io.unobserve(entry.target); }
+  /* ---------- shop filters ---------- */
+  var chips = $$("[data-filter]");
+  var cardList = $("[data-cards]");
+  if (chips.length && cardList) {
+    var status = $("[data-filter-status]");
+    chips.forEach(function (chip) {
+      chip.addEventListener("click", function () {
+        var f = chip.getAttribute("data-filter");
+        chips.forEach(function (c) { c.setAttribute("aria-pressed", String(c === chip)); });
+        var shown = 0;
+        $$(".card", cardList).forEach(function (card) {
+          var sys = card.getAttribute("data-system");
+          var show = f === "all" || sys === f || sys === "all";
+          card.hidden = !show;
+          if (show && sys !== "all") shown++;
+        });
+        if (status) status.textContent = shown + (shown === 1 ? " product" : " products") + (f === "all" ? "" : " for " + f);
       });
-    }, { rootMargin: "0px 0px -8% 0px", threshold: 0.08 });
-    revealEls.forEach(function (el) { io.observe(el); });
-  } else {
-    revealEls.forEach(function (el) { el.classList.add("is-visible"); });
+    });
   }
 
   /* ---------- product page: photo stage + lightbox ---------- */
   var galleryData = $("#gallery-data");
   if (galleryData) {
-    var data = JSON.parse(galleryData.textContent);
+    var data = JSON.parse(galleryData.textContent).stage;
+    var total = data.length;
     var stageBtn = $("[data-stage]");
     var stageImg = stageBtn && $("img", stageBtn);
+    var stageCount = $("[data-stage-count]");
     var thumbs = $$("[data-thumb]");
+    var two = function (n) { return (n < 10 ? "0" : "") + n; };
 
+    var showStage = function (i) {
+      var s = data[i];
+      thumbs.forEach(function (b) { b.removeAttribute("aria-current"); });
+      if (thumbs[i]) thumbs[i].setAttribute("aria-current", "true");
+      stageBtn.setAttribute("data-open", i);
+      if (stageCount) stageCount.textContent = two(i + 1) + " / " + two(total);
+      var swap = function () {
+        stageImg.srcset = s.srcset;
+        stageImg.src = s.src;
+        stageImg.alt = s.alt;
+        stageImg.width = s.w;
+        stageImg.height = s.h;
+        stageImg.classList.remove("is-swapping");
+      };
+      if (reduceMotion) { swap(); } else { stageImg.classList.add("is-swapping"); setTimeout(swap, 150); }
+    };
     thumbs.forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        var i = +btn.getAttribute("data-thumb");
-        var s = data.stage[i];
-        thumbs.forEach(function (b) { b.removeAttribute("aria-current"); });
-        btn.setAttribute("aria-current", "true");
-        stageBtn.setAttribute("data-open", i);
-        stageImg.classList.add("is-swapping");
-        var swap = function () {
-          stageImg.srcset = s.srcset;
-          stageImg.src = s.src;
-          stageImg.alt = s.alt;
-          stageImg.width = s.w;
-          stageImg.height = s.h;
-          stageImg.classList.remove("is-swapping");
-        };
-        if (reduceMotion) swap(); else setTimeout(swap, 180);
-      });
+      btn.addEventListener("click", function () { showStage(+btn.getAttribute("data-thumb")); });
     });
 
     var lb = $("[data-lightbox]");
@@ -148,13 +119,11 @@
       var lbCount = $("[data-lb-count]", lb);
       var current = 0;
       var opener = null;
-      var total = data.lightbox.length;
       var show = function (i) {
         current = (i + total) % total;
-        var item = data.lightbox[current];
-        lbImg.src = item.src;
-        lbImg.alt = item.alt;
-        lbCap.textContent = item.alt;
+        lbImg.src = data[current].src;
+        lbImg.alt = data[current].alt;
+        lbCap.textContent = data[current].alt;
         lbCount.textContent = "Photo " + (current + 1) + " of " + total;
       };
       $$("[data-open]").forEach(function (btn) {
@@ -184,12 +153,39 @@
     }
   }
 
-  /* ---------- product page: "Add to order" ---------- */
-  // Store the choice in this browser and go to the order form. Without JS (or
-  // without storage) the form falls back to a GET with ?add=... that the home
-  // page picks up below.
+  /* ---------- product page: options, quantity, add to order, buy now ---------- */
   var addForm = $("[data-add-form]");
   if (addForm) {
+    var priceDisplay = $("[data-price-display]");
+    var buyBtn = $("[data-buy]");
+    var checkout = $("#checkout-data") ? JSON.parse($("#checkout-data").textContent) : {};
+    var qtyInput = $('input[name="qty"]', addForm);
+
+    var refresh = function () {
+      var priced = $$('input[type="radio"][data-priced="1"]:checked', addForm)[0];
+      if (priced && priceDisplay) {
+        var p = priced.getAttribute("data-price");
+        priceDisplay.textContent = p === "" ? "On request" : (priced.getAttribute("data-from") === "1" ? "from " : "") + "€" + p;
+      }
+      if (buyBtn) {
+        var key = priced ? priced.name.slice(1) + ":" + priced.value : "*";
+        var url = checkout[key] || checkout["*"];
+        buyBtn.hidden = !url;
+        if (url) buyBtn.href = url;
+      }
+    };
+    $$('input[type="radio"]', addForm).forEach(function (r) { r.addEventListener("change", refresh); });
+    refresh();
+
+    $$("[data-qty-step]", addForm).forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var v = (parseInt(qtyInput.value, 10) || 1) + +btn.getAttribute("data-qty-step");
+        qtyInput.value = Math.max(1, Math.min(50, v));
+      });
+    });
+
+    // Store the choice in this browser and go to the order form. Without JS
+    // (or storage) the form falls back to a GET with ?add=... instead.
     addForm.addEventListener("submit", function (e) {
       var fd = new FormData(addForm);
       var slug = fd.get("add");
@@ -201,7 +197,7 @@
       var same = prev && JSON.stringify(prev.opts) === JSON.stringify(opts);
       order[slug] = { qty: Math.min(50, (same ? prev.qty : 0) + qty), opts: opts };
       saveOrder(order);
-      if (JSON.stringify(loadOrder()[slug]) !== JSON.stringify(order[slug])) return; // storage blocked: use the GET fallback
+      if (JSON.stringify(loadOrder()[slug]) !== JSON.stringify(order[slug])) return; // storage blocked
       e.preventDefault();
       window.location.href = addForm.getAttribute("action") + "#order";
     });
@@ -215,21 +211,20 @@
   var OD = JSON.parse(orderDataEl.textContent);
   var order = loadOrder();
   var rows = $$(".order-row", form);
-  var euro = function (n) { return "€" + (Math.round(n * 100) / 100).toString(); };
 
-  // Accept "?add=slug&qty=1&o0=..." from a product page's "Add to order" form.
+  // Accept "?add=slug&qty=1&o0=..." from a product page without JS/storage.
   var params = new URLSearchParams(window.location.search);
   var addSlug = params.get("add");
   if (addSlug && OD.products[addSlug]) {
-    var p = OD.products[addSlug];
-    var opts = p.options.map(function (g, gi) {
+    var ap = OD.products[addSlug];
+    var aopts = ap.options.map(function (g, gi) {
       var v = parseInt(params.get("o" + gi), 10);
       return v >= 0 && v < g.choices.length ? v : 0;
     });
     var addQty = Math.max(1, Math.min(50, parseInt(params.get("qty"), 10) || 1));
-    var prev = order[addSlug];
-    var sameOpts = prev && JSON.stringify(prev.opts) === JSON.stringify(opts);
-    order[addSlug] = { qty: Math.min(50, (sameOpts ? prev.qty : 0) + addQty), opts: opts };
+    var prevSt = order[addSlug];
+    var sameOpts = prevSt && JSON.stringify(prevSt.opts) === JSON.stringify(aopts);
+    order[addSlug] = { qty: Math.min(50, (sameOpts ? prevSt.qty : 0) + addQty), opts: aopts };
     saveOrder(order);
     if (window.history && history.replaceState) history.replaceState(null, "", window.location.pathname + "#order");
     window.addEventListener("load", function () {
@@ -240,10 +235,7 @@
 
   function lineFor(slug, state) {
     var p = OD.products[slug];
-    var unit = p.price;
-    var from = p.from;
-    var quote = false;
-    var details = [];
+    var unit = p.price, from = p.from, quote = false, details = [];
     p.options.forEach(function (g, gi) {
       var c = g.choices[state.opts && state.opts[gi] != null ? state.opts[gi] : 0] || g.choices[0];
       details.push(c.label);
@@ -252,9 +244,8 @@
         if (c.price == null) quote = true; else unit = c.price;
       }
     });
-    return { name: p.name, qty: state.qty, unit: unit, total: unit * state.qty, from: from, quote: quote, details: details };
+    return { name: p.name, code: p.code, qty: state.qty, total: unit * state.qty, from: from, quote: quote, details: details };
   }
-
   function currentLines() {
     return rows.map(function (row) {
       var slug = row.getAttribute("data-product");
@@ -262,6 +253,7 @@
       return st.qty > 0 ? lineFor(slug, st) : null;
     }).filter(Boolean);
   }
+  function priceText(l) { return l.quote ? "quote" : (l.from ? "from " : "") + euro(l.total); }
 
   var summaryEl = $("[data-summary]", form);
   var totalEl = $("[data-total]", form);
@@ -274,31 +266,25 @@
     rows.forEach(function (row) {
       var slug = row.getAttribute("data-product");
       var st = order[slug] || { qty: 0, opts: [] };
-      var qtyInput = $("[data-qty]", row);
-      if (document.activeElement !== qtyInput) qtyInput.value = st.qty;
+      var q = $("[data-qty]", row);
+      if (document.activeElement !== q) q.value = st.qty;
       $$("select[data-opt]", row).forEach(function (sel) {
         var gi = +sel.getAttribute("data-opt");
         if (st.opts && st.opts[gi] != null) sel.value = String(st.opts[gi]);
       });
       row.classList.toggle("is-active", st.qty > 0);
-      var priceEl = $("[data-line-price]", row);
-      if (st.qty > 0) {
-        var l = lineFor(slug, st);
-        priceEl.textContent = l.quote ? "quote" : (l.from ? "from " : "") + euro(l.total);
-      } else {
-        var base = OD.products[slug];
-        priceEl.textContent = (base.from ? "from " : "") + euro(base.price);
-      }
+      var base = OD.products[slug];
+      $("[data-line-price]", row).textContent = st.qty > 0 ? priceText(lineFor(slug, st)) : (base.from ? "from " : "") + euro(base.price);
     });
 
     var lines = currentLines();
     var total = 0, anyFrom = false, anyQuote = false;
     summaryEl.innerHTML = "";
     if (!lines.length) {
-      var li = document.createElement("li");
-      li.className = "summary-empty";
-      li.textContent = "No gear selected yet.";
-      summaryEl.appendChild(li);
+      var empty = document.createElement("li");
+      empty.className = "summary-empty";
+      empty.textContent = "No gear selected yet.";
+      summaryEl.appendChild(empty);
     }
     lines.forEach(function (l) {
       if (!l.quote) total += l.total;
@@ -306,7 +292,6 @@
       anyQuote = anyQuote || l.quote;
       var li = document.createElement("li");
       var name = document.createElement("span");
-      name.className = "s-name";
       name.textContent = l.qty + "× " + l.name;
       if (l.details.length) {
         var small = document.createElement("small");
@@ -315,7 +300,7 @@
       }
       var price = document.createElement("span");
       price.className = "s-price";
-      price.textContent = l.quote ? "quote" : (l.from ? "from " : "") + euro(l.total);
+      price.textContent = priceText(l);
       li.appendChild(name);
       li.appendChild(price);
       summaryEl.appendChild(li);
@@ -328,7 +313,7 @@
     var free = total >= OD.threshold;
     shipBox.classList.toggle("is-free", free);
     shipText.textContent = free
-      ? "Free EU shipping unlocked. Peak level reached."
+      ? "Free EU shipping included."
       : total > 0
         ? euro(OD.threshold - total) + " more for free EU shipping."
         : "Free EU shipping above " + euro(OD.threshold) + ".";
@@ -346,14 +331,13 @@
 
   rows.forEach(function (row) {
     var slug = row.getAttribute("data-product");
-    var qtyInput = $("[data-qty]", row);
+    var q = $("[data-qty]", row);
     $$("[data-step]", row).forEach(function (btn) {
       btn.addEventListener("click", function () {
-        var cur = (order[slug] && order[slug].qty) || 0;
-        setQty(slug, cur + +btn.getAttribute("data-step"));
+        setQty(slug, ((order[slug] && order[slug].qty) || 0) + +btn.getAttribute("data-step"));
       });
     });
-    qtyInput.addEventListener("input", function () { setQty(slug, parseInt(qtyInput.value, 10) || 0); });
+    q.addEventListener("input", function () { setQty(slug, parseInt(q.value, 10) || 0); });
     $$("select[data-opt]", row).forEach(function (sel) {
       sel.addEventListener("change", function () {
         var st = order[slug] || { qty: 0, opts: [] };
@@ -375,15 +359,14 @@
       if (!l.quote) total += l.total;
       anyFrom = anyFrom || l.from;
       anyQuote = anyQuote || l.quote;
-      out.push("- " + l.qty + "x " + l.name + (l.details.length ? " (" + l.details.join(", ") + ")" : "") +
-        ": " + (l.quote ? "price on request" : (l.from ? "from " : "") + euro(l.total)));
+      out.push("- " + l.qty + "x " + l.code + " " + l.name + (l.details.length ? " (" + l.details.join(", ") + ")" : "") +
+        ": " + (l.quote ? "price on request" : priceText(l)));
     });
-    out.push("");
-    out.push("Subtotal ex VAT: " + (anyFrom ? "from " : "") + euro(total) + (anyQuote ? " + quote" : ""));
-    var msg = (fd.get("message") || "").toString().trim();
-    if (msg) { out.push("", msg); }
+    out.push("", "Subtotal ex VAT: " + (anyFrom ? "from " : "") + euro(total) + (anyQuote ? " + quote" : ""));
+    var msg = String(fd.get("message") || "").trim();
+    if (msg) out.push("", msg);
     out.push("", "Name: " + (fd.get("name") || ""), "Email: " + (fd.get("email") || ""));
-    var country = (fd.get("country") || "").toString().trim();
+    var country = String(fd.get("country") || "").trim();
     if (country) out.push("Shipping country: " + country);
     out.push("", "Thanks!");
     return out.join("\n");
@@ -397,7 +380,7 @@
       errorEl = document.createElement("p");
       errorEl.className = "order-error";
       errorEl.setAttribute("role", "alert");
-      errorEl.textContent = "Add at least one item to your order first.";
+      errorEl.textContent = "Add at least one product to your order first.";
       $(".order-summary .btn", form).insertAdjacentElement("afterend", errorEl);
       var firstStep = $('[data-step="1"]', form);
       if (firstStep) firstStep.focus();
@@ -405,11 +388,9 @@
     }
     if (!form.reportValidity()) return;
     var text = orderText();
-    var fd = new FormData(form);
-    var subject = "Order request 3Deca: " + (fd.get("name") || "");
-    var fallback = $("[data-order-fallback]", form);
+    var subject = "Order request 3Deca: " + (new FormData(form).get("name") || "");
     $("[data-order-text]", form).value = "To: " + OD.email + "\nSubject: " + subject + "\n\n" + text;
-    fallback.hidden = false;
+    $("[data-order-fallback]", form).hidden = false;
     window.location.href = "mailto:" + OD.email + "?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(text);
   });
 
