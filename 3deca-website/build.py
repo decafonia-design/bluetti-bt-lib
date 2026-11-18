@@ -50,6 +50,11 @@ def choice_price(c):
     return ("from " if c.get("from") else "") + euro(c["price"])
 
 
+def cas(text):
+    """Escape text and set the CAS post-nominal in italics."""
+    return e(text).replace(" CAS", " <em>CAS</em>")
+
+
 def price_label(p):
     return ("from " if p.get("price_from") else "") + euro(p["price"])
 
@@ -183,7 +188,7 @@ def footer(root):
     <div class="footer-grid">
       <div class="footer-brand">
         <a class="footer-mark" href="{home}" aria-label="3Deca, home">{WORDMARK}</a>
-        <p>Set gear for production sound.</p>
+        <p>Tools for production sound.</p>
       </div>
       <div>
         <h2 class="footer-h">Products</h2>
@@ -202,12 +207,12 @@ def footer(root):
         <h2 class="footer-h">Contact</h2>
         <ul class="footer-list">
           <li><a href="mailto:{SITE['email']}">{SITE['email']}</a></li>
-          <li><a href="{SITE['imdb']}" rel="noopener">{SITE['owner_title']} on IMDb</a></li>
+          <li><a class="imdb" href="{SITE['imdb']}" rel="noopener"><img src="{root}img/imdb.png" width="56" height="28" alt="{e(SITE['owner_title'])} on IMDb"></a></li>
         </ul>
       </div>
     </div>
     <div class="footer-bottom">
-      <p>© 2023–{YEAR} {SITE['owner']} · 3Deca</p>
+      <p>© 2023–{YEAR} {cas(SITE['owner_title'])} · 3Deca</p>
     </div>
   </div>
 </footer>
@@ -329,11 +334,11 @@ def build_home():
         "name": "3Deca",
         "url": SITE["url"],
         "email": SITE["email"],
-        "founder": {"@type": "Person", "name": SITE["owner"], "sameAs": SITE["imdb"]},
+        "founder": {"@type": "Person", "name": SITE["owner_title"], "sameAs": SITE["imdb"]},
         "description": SITE["description"],
     }
 
-    out = head(root, "3Deca · Set gear for production sound mixers", SITE["description"], SITE["url"] + "/", json_ld(ld))
+    out = head(root, "3Deca · Tools for production sound", SITE["description"], SITE["url"] + "/", json_ld(ld))
     out += '<body class="page-home">\n' + header(root)
     out += f"""<main id="main">
   <section class="hero" aria-labelledby="hero-title">
@@ -348,7 +353,7 @@ def build_home():
       </div>
       <figure class="hero-media">
         <a class="hero-shot" href="{product_href(root, hero_p['slug'])}">
-          {picture(root, intro['hero_image'], intro['hero_alt'], '(min-width: 1000px) 55vw, 100vw', 'hero-img', eager=True)}
+          {picture(root, intro['hero_image'], intro['hero_alt'], '(min-width: 1000px) 60vw, 100vw', 'hero-img', eager=True)}
         </a>
         <figcaption class="hero-caption">
           <span><span class="code">{hero_p['code']}</span> {e(hero_p['name'])}</span>
@@ -384,7 +389,7 @@ def build_home():
     <div class="container split">
       <h2 id="about-title" class="section-title">About</h2>
       <div class="about-copy">
-        <p>{e(C['about']['text'])}</p>
+        <p>{cas(C['about']['text'])}</p>
         <p><a class="text-link" href="mailto:{SITE['email']}">{SITE['email']}</a></p>
         <p><a class="imdb" href="{SITE['imdb']}" rel="noopener"><img src="img/imdb.png" width="56" height="28" alt="{e(SITE['owner_title'])} on IMDb"></a></p>
       </div>
@@ -552,7 +557,7 @@ def build_product(i, p):
     }
 
     title = f"{p['card_name']} · 3Deca"
-    desc = f"{p['summary']} {price_label(p).capitalize()} ex VAT. Designed by a production sound mixer."
+    desc = f"{p['summary']} {price_label(p).capitalize()} ex VAT."
     out = head(root, title, desc, url, json_ld(ld))
     out += '<body class="page-product">\n' + header(root)
     out += f"""<main id="main">
