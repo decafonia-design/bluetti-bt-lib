@@ -6,13 +6,13 @@
     "owner": "Jan Deca",
     "imdb": "https://www.imdb.me/jandeca",
     "free_shipping_threshold": 130,
-    "description": "Sturdy carbon/nylon set gear for production sound mixers: mounts, belt clips and storage caddies for Zaxcom, Sennheiser and Wisycom. Designed and used on set."
+    "description": "Sturdy carbon/nylon set gear for production sound mixers: mounts, belt clips and storage caddies for Zaxcom, Sennheiser and Wisycom. Designed and used on set.",
+    "owner_title": "Jan Deca CAS"
   },
   "intro": {
     "title": "Set gear for production sound",
-    "lead": "Mounts, belt clips and storage for Zaxcom, Sennheiser and Wisycom wireless systems. Printed in carbon / nylon.",
-    "hero_image": "zmt-mount/01",
-    "hero_alt": "A Zaxcom ZMT transmitter with lavalier mic and antenna seated in the black ZMT mount on concrete.",
+    "hero_image": "zmt-mount/s1",
+    "hero_alt": "Studio shot: a Zaxcom ZMT transmitter with lav mic and antenna seated in the black ZMT mount.",
     "hero_product": "zmt-mount"
   },
   "facts": [
@@ -87,33 +87,21 @@
       "system": "Zaxcom",
       "brand": "Zaxcom",
       "fits": "Zaxcom ZMT",
-      "tagline": "Put your plant mic exactly where you want it.",
       "price": 55,
       "price_from": true,
       "summary": "A holder that mounts a Zaxcom ZMT transmitter to a tripod, clamp, grip head, magic arm, superclamp or any metal surface.",
-      "description": "Plant mics go where the scene needs them, and the transmitter has to go with them. This mount holds a Zaxcom ZMT in a snug cradle and fixes it to a stand, clamp, grip head, magic arm or superclamp. Or skip the hardware: the strong, rubber-coated magnet sticks to any metal surface, from door frames to car bodies.",
-      "highlights": [
-        "Strong magnet on the back, rubber-coated so it won't scratch",
-        "Two standard 3/8\" threads, on the back and on the bottom",
-        "Snug fit: hangs upside down without dropping the transmitter",
-        "Great for car mounts"
-      ],
       "specs": [
         [
           "Fits",
-          "Zaxcom ZMT transmitters"
+          "Zaxcom ZMT"
         ],
         [
           "Mounting",
-          "Magnet + 2× 3/8\" thread (back, bottom)"
+          "Rubber-coated magnet, 2× 3/8\" thread (back, bottom)"
         ],
         [
           "Material",
           "Carbon / nylon"
-        ],
-        [
-          "Versions",
-          "With magnet €65 · Without magnet €55"
         ]
       ],
       "options": [
@@ -160,25 +148,21 @@
       "system": "Batteries",
       "brand": "NP-50 · Wisycom · AA",
       "fits": "2× NP-50 or Wisycom LBP61 + 3 or 4 AA",
-      "tagline": "Fresh batteries, one hand away.",
       "price": 40,
       "price_from": false,
       "summary": "A belt clip that carries two NP-50 or Wisycom LBP61 batteries plus 3 or 4 AA batteries, always within reach.",
-      "description": "I'm sure you've wished you had this on your belt, many times. The clip carries two NP-50 or Wisycom LBP61 batteries plus three or four AA cells, each one easy to grab with one hand. A strong spring-loaded clip keeps it on your belt, and an extra mounting hole takes a roll of tape or other accessories.",
-      "highlights": [
-        "Easy access with one hand",
-        "Strong spring-loaded belt clip",
-        "Extra mounting hole to hang tape or accessories",
-        "Custom holders possible, for example 4× NP-50"
-      ],
       "specs": [
         [
           "Holds",
-          "2× NP-50 or Wisycom LBP61 + 3 or 4× AA"
+          "2× NP-50 or Wisycom LBP61, 3 or 4× AA"
         ],
         [
           "Clip",
           "Spring-loaded belt clip"
+        ],
+        [
+          "Extra",
+          "Mounting hole for tape or accessories"
         ],
         [
           "Material",
@@ -186,10 +170,9 @@
         ],
         [
           "Custom",
-          "Other battery layouts on request"
+          "Other layouts on request"
         ]
       ],
-      "note": "Please specify NP-50 or LBP61, and 3 or 4 AA, when you order.",
       "options": [
         {
           "label": "Battery type",
@@ -240,16 +223,9 @@
       "system": "Zaxcom",
       "brand": "Zaxcom",
       "fits": "Zaxcom URX 50 / URX 100",
-      "tagline": "Protection that never gets in the way.",
       "price": 45,
       "price_from": false,
       "summary": "A belt clip sleeve that protects your Zaxcom URX 50 or URX 100 receiver.",
-      "description": "A slim belt clip sleeve for the Zaxcom URX 50 and URX 100. It protects the receiver on your belt while every connector and button stays uncovered. When it's time for fresh batteries, the receiver comes out quickly and easily.",
-      "highlights": [
-        "Protects your URX 100 / 50",
-        "Easy access to all connectors and buttons",
-        "Very easy and quick to take out and change batteries"
-      ],
       "specs": [
         [
           "Fits",
@@ -308,25 +284,17 @@
       "system": "Zaxcom",
       "brand": "Zaxcom",
       "fits": "8× Zaxcom ZMT + spare antennas + 8× NP-50",
-      "tagline": "Eight transmitters, one glance.",
       "price": 75,
       "price_from": false,
       "summary": "A box that stores 8 Zaxcom ZMT transmitters, spare antennas and 8 NP-50 batteries.",
-      "description": "One box for your ZMT kit: eight Zaxcom ZMT transmitters, their spare antennas and eight NP-50 batteries, each in its own place. Open the case and you see at once what's back and what's still out. Need it to fit your case? The box is made to order in 4, 5, 6, 8 or 10 bays.",
-      "highlights": [
-        "Holds 8 Zaxcom ZMT transmitters",
-        "Room for spare antennas and 8× NP-50 batteries",
-        "Custom dimensions to fit your case: 4, 5, 6, 8 or 10 bays",
-        "Optional radio mic storage box"
-      ],
       "specs": [
         [
           "Holds",
-          "8× ZMT + spare antennas + 8× NP-50"
+          "8× ZMT, spare antennas, 8× NP-50"
         ],
         [
           "Sizes",
-          "4, 5, 6, 8 or 10 bays (8 is standard)"
+          "4, 5, 6, 8 or 10 bays"
         ],
         [
           "Option",
@@ -337,7 +305,7 @@
           "Carbon / nylon"
         ]
       ],
-      "note": "Custom sizes and the radio mic storage box are made on request. Contact me with your setup.",
+      "note": "Custom sizes and radio mic storage box on request.",
       "options": [
         {
           "label": "Size",
@@ -376,22 +344,10 @@
       "system": "Batteries",
       "brand": "NP-50 · Wisycom",
       "fits": "NP-50 or Wisycom LBP61 batteries",
-      "tagline": "Charged, sorted, ready.",
       "price": 35,
       "price_from": true,
       "summary": "A holder to store NP-50 or Wisycom batteries, plus a 4-bay caddy that can mount on an ORCA side pouch.",
-      "description": "Keep your batteries sorted and protected. Choose the battery holder, or the 4-bay caddy that mounts on an ORCA side pouch so spares travel right on your bag. Every variant is also available for Wisycom batteries, and you can pick black, red or green.",
-      "highlights": [
-        "Holder for NP-50 / Wisycom batteries",
-        "4-bay caddy with optional ORCA side pouch mount",
-        "All variants also available for Wisycom batteries",
-        "Green and red colour options available"
-      ],
       "specs": [
-        [
-          "Models",
-          "Battery holder €40 · 4-bay caddy €35"
-        ],
         [
           "Batteries",
           "NP-50 or Wisycom LBP61"
@@ -478,16 +434,9 @@
       "system": "Sennheiser",
       "brand": "Sennheiser",
       "fits": "Sennheiser G3 / G4 receivers",
-      "tagline": "Low profile. Locked in.",
       "price": 25,
       "price_from": false,
       "summary": "An alternative belt clip for Sennheiser G3 / G4 receivers.",
-      "description": "An alternative belt clip for Sennheiser G3 and G4 receivers. It keeps a low profile on the body, it's sturdy, and it holds the receiver securely. It comes with the belt clip, and the original Sennheiser clip is included.",
-      "highlights": [
-        "Low profile and sturdy",
-        "Secure fit",
-        "Comes with the belt clip and the original Sennheiser clip included"
-      ],
       "specs": [
         [
           "Fits",
@@ -495,7 +444,7 @@
         ],
         [
           "Included",
-          "Belt clip + original Sennheiser clip"
+          "Belt clip, original Sennheiser clip"
         ],
         [
           "Material",
@@ -525,17 +474,9 @@
       "system": "Sennheiser",
       "brand": "Sennheiser",
       "fits": "Sennheiser IEM G3 / G4 Tx / Rx",
-      "tagline": "Hit me with your custom setup requests.",
       "price": 55,
       "price_from": true,
       "summary": "A sturdy caddy to store Sennheiser G3 / G4 transmitters and receivers.",
-      "description": "A sturdy caddy for Sennheiser IEM G3 and G4 transmitters and receivers. The fit is snug enough to hold them even upside down, and a recess leaves room for the headphone knob. Caddies are made in 2 to 12 bays, including a custom 8-bay with an ABS support that fits a standard Euronorm case perfectly.",
-      "highlights": [
-        "Snug fit: it holds your receivers even upside down",
-        "Custom dimensions to fit your case: 2, 4, 6, 8, 10 or 12 bays",
-        "Custom 8-bay with a support for a perfect fit in a standard Euronorm case",
-        "Recess for the headphone knob"
-      ],
       "specs": [
         [
           "Fits",
@@ -547,14 +488,14 @@
         ],
         [
           "Case fit",
-          "Custom 8-bay for a standard Euronorm case"
+          "8-bay with support for Euronorm case"
         ],
         [
           "Material",
           "Carbon / nylon, support in ABS"
         ]
       ],
-      "note": "Prices start at €55 and depend on the number of bays. Contact me with your request.",
+      "note": "Price depends on the number of bays.",
       "options": [
         {
           "label": "Bays",
@@ -610,8 +551,7 @@
     }
   ],
   "about": {
-    "text": "3Deca is run by Jan Deca, a production sound mixer based in Europe. Every product was developed for his own work on set.",
-    "contact": "For questions, custom builds or a commercial invoice, contact info@3deca.com."
+    "text": "3Deca is run by Jan Deca CAS, production sound mixer based in Europe."
   },
   "ordering": {
     "points": [

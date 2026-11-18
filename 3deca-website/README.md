@@ -5,14 +5,14 @@ De map `public/` **is** de website. Je zet die map online en klaar.
 
 ## Wat er nieuw is
 
-- **Sober, minimalistisch ontwerp**: wit en lichtgrijs, strak raster, rustige zwarte letter (Archivo),
+- **Donker, minimalistisch ontwerp**: bijna zwarte achtergrond, lichte dunne letter (Archivo), strak raster,
   kleine titels en geen effecten. Oranje komt alleen terug in het kleine logovierkantje. Producten hebben
   een productcode (3D-01 … 3D-07), zoals in een catalogus.
-- **Duidelijke productfoto's**: elk product staat vrijstaand op een rustige lichtgrijze studio-achtergrond met
-  zachte schaduw. Die zijn gemaakt uit je eigen foto's. Ga je met de muis over een product, dan zie je het in
+- **Duidelijke productfoto's**: elk product staat vrijstaand onder een zacht spotlicht dat naadloos overloopt
+  in de paginakleur. Die zijn gemaakt uit je eigen foto's. Ga je met de muis over een product, dan zie je het in
   gebruik op de set.
-- **Betere beschrijvingen**: per product een beschrijving, een lijst met kenmerken ("Features") en een
-  specificatietabel. Alles is gebaseerd op de informatie van de oude site, er is niets verzonnen.
+- **Zakelijk**: geen uitleg bij de producten, alleen een korte specificatietabel (past op, bevestiging,
+  materiaal, …) op basis van de informatie van de oude site.
 - **Collectie met filters** per systeem (Zaxcom, Sennheiser, batterijen), een rustige tegel "Need a different fit?"
   voor maatwerk, een strook "In use" met foto's van de set, een korte "About", reviews en een FAQ.
 - **Productpagina's**: grote fotoviewer (studio- en setfoto's), keuzeknoppen per variant die de prijs live
@@ -80,5 +80,5 @@ Open daarna http://localhost:8000.
   Op de nieuwe site staat overal LBP61. Klopt dat?
 - De ZMT-mount krijgt de vermelding "rubber-coated magnet". Dat komt uit een review van een klant.
 - De bestelmodule groet in de e-mail met "Hi Jan". Dat kun je aanpassen in `public/js/main.js`.
-- De beschrijvingen per product en de tekst bij "About" zijn herschreven op basis van de oude teksten. Lees ze even na.
+- Lees de specificaties per product even na.
 - Webshop: zie `WEBSHOP.md` voor de opties, kosten en mijn advies.
