@@ -184,6 +184,29 @@
     }
   }
 
+  /* ---------- product page: "Add to order" ---------- */
+  // Store the choice in this browser and go to the order form. Without JS (or
+  // without storage) the form falls back to a GET with ?add=... that the home
+  // page picks up below.
+  var addForm = $("[data-add-form]");
+  if (addForm) {
+    addForm.addEventListener("submit", function (e) {
+      var fd = new FormData(addForm);
+      var slug = fd.get("add");
+      var opts = [];
+      for (var gi = 0; fd.has("o" + gi); gi++) opts.push(parseInt(fd.get("o" + gi), 10) || 0);
+      var qty = Math.max(1, Math.min(50, parseInt(fd.get("qty"), 10) || 1));
+      var order = loadOrder();
+      var prev = order[slug];
+      var same = prev && JSON.stringify(prev.opts) === JSON.stringify(opts);
+      order[slug] = { qty: Math.min(50, (same ? prev.qty : 0) + qty), opts: opts };
+      saveOrder(order);
+      if (JSON.stringify(loadOrder()[slug]) !== JSON.stringify(order[slug])) return; // storage blocked: use the GET fallback
+      e.preventDefault();
+      window.location.href = addForm.getAttribute("action") + "#order";
+    });
+  }
+
   /* ---------- order builder (home page) ---------- */
   var orderDataEl = $("#order-data");
   var form = $("[data-order-form]");
