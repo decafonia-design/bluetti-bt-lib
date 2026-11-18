@@ -91,7 +91,8 @@ def picture(root, key, alt, sizes, cls="", eager=False):
 
 
 def studio_keys(p):
-    return [f"{p['slug']}/s{k + 1}" for k in range(len(p["studio"]))]
+    """The cover photo: a product-centred 4:3 crop of one original photo."""
+    return [f"{p['slug']}/c"]
 
 
 def photo_keys(p):
@@ -229,7 +230,6 @@ def product_card(root, p):
           </span>
           <span class="card-meta"><span class="code">{p['code']}</span><span>{e(p['brand'])}</span></span>
           <span class="card-title">{e(p['name'])}</span>
-          <span class="card-tagline">{e(p['fits'])}</span>
           <span class="card-price">{price_label(p)}</span>
         </a>
       </li>"""

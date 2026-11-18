@@ -8,9 +8,9 @@ De map `public/` **is** de website. Je zet die map online en klaar.
 - **Donker, minimalistisch ontwerp**: bijna zwarte achtergrond, lichte dunne letter (Archivo), strak raster,
   kleine titels en geen effecten. Oranje komt alleen terug in het kleine logovierkantje. Producten hebben
   een productcode (3D-01 … 3D-07), zoals in een catalogus.
-- **Duidelijke productfoto's**: elk product staat vrijstaand onder een zacht spotlicht dat naadloos overloopt
-  in de paginakleur. Die zijn gemaakt uit je eigen foto's. Ga je met de muis over een product, dan zie je het in
-  gebruik op de set.
+- **Echte productfoto's**: je eigen foto's, niet uitgeknipt. Elk product heeft een uitsnede in 4:3 met het
+  product in het midden, en alle foto's hebben dezelfde ingetogen kleurbehandeling, zodat ze één reeks vormen.
+  Ga je met de muis over een product, dan zie je het in gebruik op de set.
 - **Zakelijk**: geen uitleg bij de producten, alleen een korte specificatietabel (past op, bevestiging,
   materiaal, …) op basis van de informatie van de oude site.
 - **Collectie met filters** per systeem (Zaxcom, Sennheiser, batterijen), een rustige tegel "Need a different fit?"
@@ -49,8 +49,8 @@ De map `public/` **is** de website. Je zet die map online en klaar.
 3. Zet de gewijzigde bestanden uit `public/` opnieuw online.
 
 Wil je een foto toevoegen? Zet `NN-720.webp` en `NN-1600.webp` in `public/img/<product>/` en voeg
-een alt-tekst toe aan de `images`-lijst van dat product in `content.json`. Studiofoto's heten
-`s1-720.webp`, `s1-1600.webp`, … en horen bij de `studio`-lijst.
+een alt-tekst toe aan de `images`-lijst van dat product in `content.json`. De hoofdfoto van een
+product heet `c-720.webp` / `c-1600.webp` (een uitsnede in 4:3); de alt-tekst staat in de `studio`-lijst.
 
 ## Online zetten
 
