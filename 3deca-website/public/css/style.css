@@ -197,7 +197,7 @@ body { font-weight: 350; }
 .uses { list-style: none; margin: 0; padding: 0; display: grid; gap: clamp(14px, 1.6vw, 24px); grid-template-columns: repeat(2, 1fr); }
 @media (min-width: 900px) { .uses { grid-template-columns: repeat(4, 1fr); } }
 .use figure { margin: 0; }
-.use-media { aspect-ratio: 4 / 5; overflow: hidden; background: var(--photo); }
+.use-media { display: block; aspect-ratio: 4 / 5; overflow: hidden; background: var(--photo); }
 .use-media img { width: 100%; height: 100%; object-fit: cover; }
 .use figcaption { margin-top: 0.75rem; font-size: 0.92rem; line-height: 1.45; color: var(--ink-2); }
 .use figcaption .code { color: var(--ink); margin-right: 0.3rem; }

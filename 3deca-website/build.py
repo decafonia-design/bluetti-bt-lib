@@ -296,11 +296,7 @@ def build_home():
 
     in_use = "".join(
         f"""<li class="use">
-          <figure>
-            <div class="use-media">{picture(root, u['image'], BY_SLUG[u['product']]['images'][int(u['image'].split('/')[1]) - 1], '(min-width: 900px) 25vw, 50vw')}</div>
-            <figcaption><span class="code">{BY_SLUG[u['product']]['code']}</span> {e(u['caption'])}
-              <a href="{product_href(root, u['product'])}">{e(BY_SLUG[u['product']]['name'])}<span class="sr-only"> product page</span> →</a></figcaption>
-          </figure>
+          <a class="use-media" href="{product_href(root, u['product'])}">{picture(root, u['image'], BY_SLUG[u['product']]['images'][int(u['image'].split('/')[1]) - 1], '(min-width: 900px) 25vw, 50vw')}</a>
         </li>"""
         for u in C["in_use"]
     )
