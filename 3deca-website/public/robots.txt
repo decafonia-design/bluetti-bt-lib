@@ -1,3 +1,0 @@
-User-agent: *
-Allow: /
-Sitemap: https://www.3deca.com/sitemap.xml
