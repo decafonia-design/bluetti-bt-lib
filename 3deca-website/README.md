@@ -52,20 +52,43 @@ Wil je een foto toevoegen? Zet `NN-720.webp` en `NN-1600.webp` in `public/img/<p
 een alt-tekst toe aan de `images`-lijst van dat product in `content.json`. De hoofdfoto van een
 product heet `c-720.webp` / `c-1600.webp` (een uitsnede in 4:3); de alt-tekst staat in de `studio`-lijst.
 
-## Online zetten
+## Online zetten (gratis, via GitHub Pages)
 
-**Let op:** de huidige site draait op de *Combel Sitebuilder*. Daarin kun je geen eigen HTML-bestanden
-uploaden. Je hebt dus één van deze twee opties:
+De site wordt gratis gehost door GitHub Pages, met HTTPS. Je domeinnaam en je e-mail blijven bij Combell.
+Elke wijziging in `3deca-website/public/` die op de branch `ha-deployment` komt, zet GitHub automatisch
+online (workflow `.github/workflows/pages-3deca.yml`).
 
-### A. Combel webhosting (domein en hosting blijven bij Combel)
-1. Neem bij Combel een gewoon webhostingpakket (Linux) in plaats van de Sitebuilder, of laat het omzetten.
-2. Upload de **inhoud** van `public/`, inclusief het verborgen bestand `.htaccess`, naar de webmap
-   (meestal `www` of `public_html`). Dat kan met FileZilla (FTP/SFTP) of met de bestandsbeheerder in je Combel-controlepaneel.
-3. Klaar. Oude links zoals `/en/` sturen automatisch door naar de nieuwe homepage.
+### Eenmalig in GitHub
+1. Voeg de pull request samen in `ha-deployment`.
+2. Ga in de repository naar **Settings → Pages**, en kies bij **Source** voor **GitHub Actions**.
+3. Start de workflow eenmalig: **Actions → Publish 3deca.com → Run workflow**.
+4. Vul in **Settings → Pages** bij **Custom domain** `www.3deca.com` in. Vink **Enforce HTTPS** aan
+   zodra GitHub dat toelaat (dat kan een tot enkele uren duren na de DNS-wijziging).
 
-### B. Gratis statische hosting (domein blijft bij Combel)
-1. Sleep de map `public/` naar bijvoorbeeld Netlify Drop of Cloudflare Pages.
-2. Laat bij Combel de DNS van www.3deca.com naar die dienst wijzen (zij geven je de exacte records).
+### Eenmalig bij Combell (DNS-beheer van 3deca.com)
+Pas **alleen** deze records aan. Verwijder de bestaande A- en CNAME-records voor `3deca.com` en `www`
+die naar de Sitebuilder wijzen, en zet er dit voor in de plaats:
+
+| Type | Naam | Waarde |
+|---|---|---|
+| CNAME | `www` | `decafonia-design.github.io` |
+| A | `@` (3deca.com) | `185.199.108.153` |
+| A | `@` | `185.199.109.153` |
+| A | `@` | `185.199.110.153` |
+| A | `@` | `185.199.111.153` |
+
+**Raak de MX-records en andere mailrecords (SPF/TXT, autodiscover, …) niet aan.** Die zorgen ervoor
+dat info@3deca.com blijft werken.
+
+### Daarna
+- Werkt de nieuwe site op www.3deca.com, dan kun je het Sitebuilder-abonnement bij Combell opzeggen.
+  **Kijk eerst na of je mailbox los staat van het Sitebuilder-pakket.** Zit de mail in hetzelfde pakket,
+  verhuis die dan eerst naar een los mailproduct, anders valt je e-mail weg.
+- Oude links zoals `/en/` sturen door naar de homepage. De productpagina's behouden hun oude adressen.
+
+### Alternatief: Combell-webhosting
+Wil je liever alles bij Combell, neem dan een gewoon (Linux-)webhostingpakket en upload de inhoud van
+`public/`, inclusief `.htaccess`, naar de webmap via FTP. Dat kost wel een maandelijks bedrag.
 
 ## Lokaal bekijken
 
